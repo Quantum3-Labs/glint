@@ -35,10 +35,6 @@ export function bytes32ToField(bytes: Uint8Array): bigint {
   return modR(v);
 }
 
-export function fieldToHex(x: bigint): string {
-  return Buffer.from(fieldToBytes32(x)).toString("hex");
-}
-
 export function bytesToHex(b: Uint8Array): string {
   return Buffer.from(b).toString("hex");
 }
