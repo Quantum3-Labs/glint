@@ -7,12 +7,9 @@
  *
  * Uses @noir-lang/noir_js (witness) + @aztec/bb.js (UltraHonk proof, keccak
  * oracle to match the on-chain verifier). The compiled circuit ships as JSON.
- *
- * INTEGRATION TODO:
- *   - Configure the Poseidon backend (see ./poseidon.ts) before calling
- *     `buildDepositNote` / proving — commitments must match the circuit.
- *   - Confirm @noir-lang/noir_js + @aztec/bb.js versions match nargo 1.0.0-beta.9
- *     + bb 0.87.0, and that `{ keccak: true }` is the right flag for this bb.
+ * Poseidon (./poseidon.ts) is bb.js and is verified to match the circuit; the
+ * pinned versions (noir_js 1.0.0-beta.9, bb.js 0.87.0) match nargo + bb and are
+ * exercised end-to-end on testnet (see scripts/patronage-e2e.ts).
  */
 import type { CompiledCircuit } from "@noir-lang/noir_js";
 import {
