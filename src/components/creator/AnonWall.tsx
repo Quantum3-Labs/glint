@@ -3,29 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { formatRelativeTime } from "@/lib/format-time";
 import {
   PATRONAGE_POSTED_EVENT,
   type PatronagePostedDetail,
 } from "@/lib/patronage/events";
 
 type AnonMessage = { message: string; timestamp: string };
-
-/** Relative time, matching TipWall's formatting. */
-function formatTimestamp(timestamp: string): string {
-  const ms = Number(BigInt(timestamp)) * 1000;
-  const sec = Math.floor((Date.now() - ms) / 1000);
-  if (sec < 60) return "just now";
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return new Date(ms).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 /**
  * Wall of anonymous, proof-backed supporter messages for a creator.
@@ -89,7 +73,7 @@ export function AnonWall({ slug }: { slug: string }) {
                 className="pb-4 border-b border-[var(--color-border)] last:border-0 last:pb-0"
               >
                 <div className="text-xs text-[var(--color-ink-muted)] mb-1">
-                  verified supporter · {formatTimestamp(m.timestamp)}
+                  verified supporter · {formatRelativeTime(m.timestamp)}
                 </div>
                 <p className="pl-3 border-l-2 border-[var(--color-accent)] text-sm text-[var(--color-ink-soft)] whitespace-pre-wrap break-words">
                   {m.message}
