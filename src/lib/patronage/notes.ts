@@ -38,3 +38,12 @@ export function notesForSlug(slug: string): StoredNote[] {
     .filter((n) => n.slug === slug)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
+
+/**
+ * Drop a note after its single post (the nullifier is now spent on-chain, so it
+ * can never post again). Keeps the dropdown showing only usable notes.
+ */
+export function removeNote(commitmentHex: string): void {
+  if (typeof window === "undefined") return;
+  writeAll(readAll().filter((n) => n.commitmentHex !== commitmentHex));
+}
