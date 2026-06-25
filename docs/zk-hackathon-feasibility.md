@@ -79,26 +79,49 @@ contract. Four independent reasons it is a safe choice:
 | 5 | Protocol 26 made Noir proofs meaningfully cheaper to verify on-chain | Hackathon listing (intro) | "Protocol 26 ('Yardstick') built on that with nine additional BN254 host functions ... making proof verification — including NoirLang proofs — meaningfully cheaper to run on-chain." |
 | 6 | Live networks already have the BN254 host functions the verifier needs | [Stellar software-versions docs](https://developers.stellar.org/docs/networks/software-versions) | As of June 2026: **mainnet = Protocol 26** ("Yardstick", live 2026-05-06); **testnet = Protocol 27** (live 2026-06-18). The BN254 EC host functions ship in CAP-0074 (P25) and the G1 MSM host function (`bn254_g1_msm`) in CAP-0080 (P26, status "Implemented"); both are present on the current testnet and mainnet. |
 
-## 4. The one open risk: instruction budget
+## 4. Instruction budget — MEASURED on testnet (Day-1 spike done)
 
-The hackathon names the trade-off itself: Noir's "downside is the Ultrahonk proofs are larger and
-cost more to verify on-chain" (#1). With native host functions this is far cheaper than the old
-WASM-emulation numbers — the same listing says P26 made Noir proofs "meaningfully cheaper" (#5) —
-but the exact cost for our circuit is the one thing nobody can confirm on paper.
+We ran the spike: forked `rs-soroban-ultrahonk`, generated proofs with the pinned toolchain
+(nargo 1.0.0-beta.9 + bb 0.87.0), deployed the verifier to **Stellar testnet (Protocol 27)**, and
+verified real proofs on-chain. Numbers from `scripts/measure_ultrahonk_costs` (simulation against
+the live testnet RPC):
 
-- The per-tx limit (`txMaxInstructions`) is a **validator-voted network config**, not a fixed
-  protocol constant; the exact live value must be queried from a node (RPC `getLedgerEntries` on
-  the `CONFIG_SETTING_CONTRACT_COMPUTE_V0` entry) — historically ~100M.
-  [SLP-0004](https://github.com/stellar/stellar-protocol/blob/master/limits/slp-0004.md) proposes
-  raising it 100,000,000 → 400,000,000; its document status is "Final" but that is **not**
-  confirmation it has been voted onto the live networks (**NOT VERIFIED** as shipped).
+| Operation | CPU instructions | % of per-tx limit | Min fee | On-chain (testnet) |
+|---|---|---|---|---|
+| `verify_proof` — `simple_circuit` (1 public input) | 79,964,593 | 79.96% | 0.0137 XLM | succeeded |
+| `verify_proof` — `tornado` (Merkle depth 20 + nullifier) | 82,064,455 | 82.06% | 0.0139 XLM | succeeded |
+| **full `withdraw`** — verify + Merkle root check + nullifier + event | **83,770,200** | **83.77%** | 0.0173 XLM | **succeeded (real deposit → withdraw)** |
 
-**Why this is manageable, not a blocker:** the cost is directly measurable. The repo ships
-[`scripts/measure_ultrahonk_costs`](https://github.com/NethermindEth/rs-soroban-ultrahonk/blob/main/scripts/measure_ultrahonk_costs/README.md),
-which "prints CPU instructions, memory usage, and minimum resource fees". Our circuit (Merkle
-membership + nullifier) is on the small end. If a Day-1 measurement comes back over budget, the
-fallback is to **shrink the circuit** (smaller Merkle depth, fewer public inputs) — not to change
-language.
+- The live testnet per-tx instruction limit is confirmed **100,000,000**.
+- The **complete anonymous-patronage withdraw** (our exact use case) executed end-to-end on
+  testnet: a real `deposit` of a commitment, then a real `withdraw` that verified the proof,
+  checked the Merkle root, enforced the nullifier, and emitted the event — all in one transaction
+  at **83.77M / 100M, ~16M headroom**. Testnet txs:
+  [deposit `ba3b86f4…`](https://stellar.expert/explorer/testnet/tx/ba3b86f40467d0c6f2b436b4f51aa89cdb881e06eb13c0efcec57cb0e3c25c28),
+  [withdraw `949e1aac…`](https://stellar.expert/explorer/testnet/tx/949e1aac65cb932467dded266c1ee3b6b8cc8c89ca64f275a155058101cf7be9).
+- The mixer logic on top of the bare verify costs only ~1.7M instructions (83.77M − 82.06M).
+- Fee is trivial (~0.017 XLM per withdraw).
+
+**Key finding — UltraHonk verify cost is a near-constant floor (~80M), not circuit-size-driven.**
+The proof is constant size (14,592 bytes) regardless of circuit; verification is dominated by a
+fixed MSM + two pairings. `simple_circuit` (smallest) already costs 79.96M; `tornado` (depth 20)
+only adds ~2M (mostly the extra public input). So **~80% of the per-tx budget is spent just
+verifying one UltraHonk proof**, leaving ~20M for everything else in the transaction.
+
+**Implications:**
+- The Day-1 gate **passes end-to-end.** The full `withdraw` (verify + Merkle + nullifier + event)
+  runs on testnet at 83.77M / 100M with ~16M headroom; the mixer logic adds only ~1.7M over the
+  bare verify.
+- **Glint's anonymous action does not move tokens**, so no SAC `transfer` is needed in the proven
+  path. The USDC tip already settles at tip time via x402; the ZK step only proves "I tipped
+  >= $X" and records an anonymous message (membership + nullifier). So our on-chain cost is the
+  measured ~83.77M plus a small delta for storing the message string (<=280 bytes) — comfortably
+  inside the ~16M headroom. (To be re-measured once the message field is added.)
+- The earlier "shrink the circuit" fallback is **wrong** and removed: shrinking the Merkle depth
+  barely moves the verify cost (it is not circuit-size-driven). If the full withdraw ever exceeds
+  100M, the real levers are the [SLP-0004](https://github.com/stellar/stellar-protocol/blob/master/limits/slp-0004.md)
+  limit raise (100M → 400M, document status "Final" but **NOT VERIFIED** as voted onto live
+  networks) or a lighter proof system (Groth16 verify is ~40M per the Privacy Pools prototype).
 
 ## 5. What changes in Glint (high level)
 
@@ -114,9 +137,10 @@ The existing TipJar contract stays as the public path; the ZK mixer is the priva
 
 ## 6. Conditions (go / no-go)
 
-1. **Day-1 spike (gate):** fork `rs-soroban-ultrahonk`, deploy the `tornado_classic` verifier +
-   mixer to **testnet**, verify one real proof, and run `measure_ultrahonk_costs` on the withdraw
-   circuit. Fits the live limit → go. Over budget → shrink the circuit and re-measure.
+1. **Day-1 spike (gate) — DONE, PASSED end-to-end.** Deployed the verifier + `tornado_classic`
+   mixer to testnet and ran a real `deposit` → `withdraw`; the full withdraw fits at 83.77M/100M
+   (§4). Glint's variant adds an anonymous message field (no token transfer) — a small delta to
+   re-measure against the ~16M headroom once wired.
 2. **Anonymity needs a crowd.** ZK hides *which* person, not *whether* you acted. A tiny set
    de-anonymizes by elimination. The demo must seed a non-trivial anonymity set.
 3. **Unlinkability is the point.** Deposit (tip -> commitment) is linkable by the server, like

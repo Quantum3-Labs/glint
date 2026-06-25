@@ -15,6 +15,8 @@ import {
 import { Spinner } from "@/components/ui/Spinner";
 import { type FormStatus, isBusy } from "@/lib/form-status";
 import { createFreighterSigner } from "@/lib/freighter";
+import { buildDepositNote } from "@/lib/patronage/client";
+import { saveNote } from "@/lib/patronage/notes";
 import { stellarExpertTxUrl } from "@/lib/stellar";
 import { dispatchTipSent } from "@/lib/tip-events";
 import {
@@ -41,6 +43,7 @@ type TipResponseBody = {
   ok: boolean;
   txHash?: string;
   recordedOnChain?: boolean | null;
+  depositedToPool?: boolean | null;
 };
 
 export function TipForm({ slug, displayName }: Props) {
@@ -102,10 +105,22 @@ export function TipForm({ slug, displayName }: Props) {
 
       setStatus({ kind: "busy", label: "Processing payment…" });
 
+      // Build an anonymous-patronage deposit note (secret stays client-side).
+      // Guarded: if the Poseidon backend isn't configured, the tip still works,
+      // just without the anonymous-post capability.
+      let depositNote: Awaited<ReturnType<typeof buildDepositNote>> | null =
+        null;
+      try {
+        depositNote = await buildDepositNote(slug);
+      } catch {
+        depositNote = null;
+      }
+
       const url = `/api/tip/${encodeURIComponent(slug)}?amount=${encodeURIComponent(finalAmount)}`;
       const body = JSON.stringify({
         message: message.trim() || undefined,
         from: address,
+        commitment: depositNote?.commitmentHex,
       });
       const response = await fetchWithPayment(url, {
         method: "POST",
@@ -130,6 +145,11 @@ export function TipForm({ slug, displayName }: Props) {
 
       const txHash = parsedBody.txHash ?? null;
       const recordedOnChain = parsedBody.recordedOnChain ?? null;
+
+      // Persist the note only if the commitment actually landed in the pool.
+      if (depositNote && parsedBody.depositedToPool) {
+        saveNote(depositNote.note, depositNote.commitmentHex);
+      }
 
       setStatus({
         kind: "success",

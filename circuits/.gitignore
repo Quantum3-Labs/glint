@@ -1,0 +1,6 @@
+# Throwaway probe circuit (not part of the feature)
+poseidon_probe/
+
+# Noir build caches (keep the compiled ACIR + vk that the app imports)
+**/target/*.gz
+**/target/Prover.toml
