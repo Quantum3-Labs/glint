@@ -2,7 +2,6 @@ import "server-only";
 import { nativeToScVal, type xdr } from "@stellar/stellar-sdk";
 import { type SendResult, simulateRead, submitWithRetry } from "../soroban-tx";
 import { bytes32ToField, fieldToBytes32 } from "./fields";
-import { merkleHash2 } from "./poseidon";
 
 /**
  * Patronage pool contract client (server-side / relayer).
@@ -11,12 +10,11 @@ import { merkleHash2 } from "./poseidon";
  * - `post` is open: the server relays the supporter's proof so the tx source
  *   account does not link back to them.
  * - reads (`getWall`, `isNullifierUsed`, `getDepositLeaves`) are simulations.
- * - `buildMerklePath` rebuilds the tree off-chain from the on-chain leaf list.
  *
- * Soroban build/sign/send/poll + simulate live in `../soroban-tx`.
+ * No bb.js here: the Merkle path is rebuilt on the client (see ./merkle.ts);
+ * this module only returns the raw leaf list. Soroban build/sign/send/poll +
+ * simulate live in `../soroban-tx`.
  */
-
-const TREE_DEPTH = 20;
 
 function getContractId(): string {
   const id = process.env.PATRONAGE_CONTRACT_ID;
@@ -91,48 +89,4 @@ export async function getDepositLeaves(): Promise<bigint[]> {
     | null;
   if (!raw) return [];
   return raw.map((b) => bytes32ToField(b));
-}
-
-// ── Merkle path (off-chain rebuild from on-chain leaf list) ──────────────────
-
-/** zero[0] = 0; zero[i+1] = H(zero[i], zero[i]). */
-async function zeroes(): Promise<bigint[]> {
-  const z: bigint[] = [0n];
-  for (let i = 0; i < TREE_DEPTH; i++) z.push(await merkleHash2(z[i], z[i]));
-  return z;
-}
-
-/**
- * Rebuild the tree from the leaf list and return the membership path for
- * `leafIndex`: the 20 sibling values and direction bits, plus the resulting root.
- */
-export async function buildMerklePath(
-  leaves: bigint[],
-  leafIndex: number,
-): Promise<{
-  siblings: bigint[];
-  bits: number[];
-  root: bigint;
-}> {
-  const z = await zeroes();
-  let level = leaves.slice();
-  const siblings: bigint[] = [];
-  const bits: number[] = [];
-  let idx = leafIndex;
-  for (let d = 0; d < TREE_DEPTH; d++) {
-    const isRight = idx & 1;
-    const sibIdx = isRight ? idx - 1 : idx + 1;
-    const sibling = sibIdx < level.length ? level[sibIdx] : z[d];
-    siblings.push(sibling);
-    bits.push(isRight);
-    const next: bigint[] = [];
-    for (let i = 0; i < level.length; i += 2) {
-      const l = level[i];
-      const r = i + 1 < level.length ? level[i + 1] : z[d];
-      next.push(await merkleHash2(l, r));
-    }
-    level = next.length ? next : [z[d + 1]];
-    idx >>= 1;
-  }
-  return { siblings, bits, root: level[0] ?? z[TREE_DEPTH] };
 }

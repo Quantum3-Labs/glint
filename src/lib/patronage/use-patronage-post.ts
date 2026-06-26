@@ -6,6 +6,8 @@ import { TIP_SENT_EVENT, type TipSentDetail } from "../tip-events";
 import { generatePostProof } from "./client";
 import { friendlyError } from "./errors";
 import { dispatchPatronagePosted } from "./events";
+import { bytes32ToField, hexToBytes } from "./fields";
+import { buildMerklePath } from "./merkle";
 import { notesForSlug, removeNote } from "./notes";
 import { nullifierHash } from "./poseidon";
 
@@ -78,20 +80,36 @@ export function usePatronagePost(slug: string) {
 
       try {
         setBusy("Building Merkle path…");
-        const pathRes = await fetch("/api/patronage/path", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ commitmentHex: note.commitmentHex }),
-        });
-        if (!pathRes.ok)
-          throw new Error((await pathRes.json()).error ?? "path failed");
-        const path = await pathRes.json();
+        // Server returns only the raw leaf list; the path is rebuilt here in the
+        // browser (bb.js is already loaded for proving) so the API runs no wasm.
+        const leavesRes = await fetch("/api/patronage/leaves");
+        if (!leavesRes.ok) throw new Error("could not read pool leaves");
+        const { leaves: leavesHex } = (await leavesRes.json()) as {
+          leaves: string[];
+        };
+        const leaves = leavesHex.map((h) => bytes32ToField(hexToBytes(h)));
+        const leafIndex = leaves.indexOf(
+          bytes32ToField(hexToBytes(note.commitmentHex)),
+        );
+        if (leafIndex < 0) {
+          throw new Error(
+            "commitment not found in pool (deposit not settled yet?)",
+          );
+        }
+        const { siblings, bits, root } = await buildMerklePath(
+          leaves,
+          leafIndex,
+        );
 
         setBusy("Generating proof (this can take a moment)…");
         const { proofHex, publicInputsHex } = await generatePostProof(
           note,
           message,
-          path,
+          {
+            siblings: siblings.map((s) => s.toString()),
+            bits,
+            root: root.toString(),
+          },
         );
 
         setBusy("Posting on-chain…");
