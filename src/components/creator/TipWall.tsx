@@ -214,7 +214,7 @@ export function TipWall({ slug }: Props) {
 
       {state.kind === "loaded" &&
         (state.messages.length > 0 || pendingSlot) && (
-          <ul className="space-y-4">
+          <ul className="space-y-4 max-h-[32rem] overflow-y-auto pr-1">
             {pendingSlot && <PendingTipSlot />}
             {state.messages.map((msg) => (
               <TipWallItem

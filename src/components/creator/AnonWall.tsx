@@ -63,7 +63,7 @@ export function AnonWall({ slug }: { slug: string }) {
           className="border-none p-0 bg-transparent"
         />
       ) : (
-        <ul className="space-y-4">
+        <ul className="space-y-4 max-h-[32rem] overflow-y-auto pr-1">
           {messages
             .slice()
             .reverse()
