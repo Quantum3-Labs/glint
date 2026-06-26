@@ -68,7 +68,7 @@ export type ProofResult = {
  *
  * @param note     the supporter's deposit note
  * @param message  the message to post (bound via msg_hash)
- * @param path     siblings + bits + root from /api/patronage/path
+ * @param path     siblings + bits + root (built client-side via ./merkle.ts)
  */
 export async function generatePostProof(
   note: DepositNote,

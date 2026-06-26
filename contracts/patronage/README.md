@@ -43,6 +43,7 @@ on Stellar testnet at **83.77M / 100M** instructions. See
 | `post(public_inputs, proof, message)` | none | verify proof, record anonymous message |
 | `get_wall(creator) -> Vec<AnonMessage>` | none | read a creator's anonymous wall |
 | `get_root() -> Option<BytesN<32>>` | none | current Merkle root |
+| `get_leaves() -> Vec<BytesN<32>>` | none | all leaf commitments (client rebuilds the path) |
 | `is_nullifier_used(nf) -> bool` | none | nullifier spent check |
 
 `public_inputs` = `[root, nullifier_hash, creator, msg_hash]` (4 x 32 bytes).

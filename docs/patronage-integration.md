@@ -11,13 +11,17 @@ Feasibility + on-chain cost are validated on testnet — see
 ## Architecture
 
 ```
-Tip time (TipForm)                 Post time (AnonPostForm)
-  client builds note                 client fetches Merkle path  ──> /api/patronage/path
-  commitment ──> /api/tip/[slug] ─┐  client generates UltraHonk proof (noir_js + bb.js)
-                                  │  proof + message ──────────> /api/patronage/post
-  server deposits commitment  <───┘  server relays post() on-chain
-  into patronage pool                 AnonWall reads get_wall  <── /api/patronage/wall/[slug]
+Tip time (TipForm)                 Post time (AnonPostForm → usePatronagePost)
+  client builds note                 client fetches leaf list  ──> /api/patronage/leaves
+  commitment ──> /api/tip/[slug] ─┐  client rebuilds the Merkle path + generates the
+                                  │    UltraHonk proof in-browser (noir_js + bb.js)
+  server deposits commitment  <───┘  proof + message ──────────> /api/patronage/post
+  into patronage pool                server relays post() on-chain
+                                     AnonWall reads get_wall  <── /api/patronage/wall/[slug]
 ```
+
+The server runs **no bb.js**: it only returns the raw leaf list; the path is
+rebuilt in the browser (which already loads bb.js for proving).
 
 - **Global pool**, one Merkle tree across all creators (max anonymity set).
 - **Commitment** = `Poseidon(nullifier, secret, creator)`, built client-side.
@@ -54,10 +58,14 @@ notes → N posts; the posts are not linkable to each other either.
 | `contracts/patronage/` | Soroban pool contract (`deposit`, `post`, `get_wall`, …) |
 | `src/lib/patronage/fields.ts` | field/keccak helpers (creator + msg_hash) |
 | `src/lib/patronage/poseidon.ts` | Poseidon2 via @aztec/bb.js (matches the circuit + contract) |
-| `src/lib/patronage/server.ts` | server client: deposit / post / wall / Merkle path |
+| `src/lib/patronage/merkle.ts` | client-side Merkle-path rebuild (bb.js) |
+| `src/lib/patronage/server.ts` | server client: deposit / post / wall reads / leaf list (no bb.js) |
 | `src/lib/patronage/client.ts` | browser: note gen + UltraHonk proof |
 | `src/lib/patronage/notes.ts` | localStorage deposit-note storage |
-| `src/app/api/patronage/{path,post,wall}/` | API routes |
+| `src/lib/patronage/errors.ts`, `events.ts` | friendly error mapping, cross-component event |
+| `src/lib/patronage/use-patronage-post.ts` | hook: notes + spent-filter + proof/relay flow |
+| `src/lib/soroban-tx.ts` | shared server-side Soroban tx helpers (TipJar + Patronage) |
+| `src/app/api/patronage/{leaves,post,wall,spent}/` | API routes |
 | `src/app/api/tip/[slug]/route.ts` | tip route, now deposits the commitment |
 | `src/components/creator/AnonPostForm.tsx`, `AnonWall.tsx` | UI |
 
@@ -102,13 +110,14 @@ Tested against live testnet — not just typecheck:
 - **Circuit + UltraHonk proof** — proof verifies on-chain inside `post`.
 - **Poseidon** matches across bb.js ↔ Noir ↔ Rust contract (`scripts/poseidon-check.ts`,
   and JS-rebuilt Merkle root == on-chain root).
-- **`/api/patronage/path`** over HTTP (real `next` runtime): `get_leaves` read +
-  multi-leaf `buildMerklePath` + server-side bb.js Poseidon → returned a valid path.
+- **`/api/patronage/leaves`** over HTTP (real `next` runtime) returns the leaf
+  list; the client-side `buildMerklePath` was checked against the on-chain root
+  for a multi-leaf tree.
 - **`/api/patronage/post`** over HTTP: server relayed the proof, it verified
   on-chain, and the message appeared on the wall (`txHash` returned, 200).
 - **`next build`** compiles the whole app including the ZK client bundle.
-- Required config: `serverExternalPackages: ["@aztec/bb.js", "@noir-lang/noir_js"]`
-  in `next.config.ts` (otherwise the bundler breaks bb.js's wasm path resolution).
+- Build config: `serverExternalPackages: ["@aztec/bb.js", "@noir-lang/noir_js"]`
+  in `next.config.ts` (kept as a safety belt — bb.js now runs only client-side).
 
 **Browser-validated (manual pass on testnet).** The full UI flow was run in a real
 browser with Freighter: tipped a creator (commitment generated client-side with
