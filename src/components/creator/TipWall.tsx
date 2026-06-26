@@ -6,6 +6,7 @@ import { EmptyState, SparkleIcon } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Spinner } from "@/components/ui/Spinner";
 import { API_ENDPOINTS, ApiError, apiClient } from "@/lib/api";
+import { formatRelativeTime } from "@/lib/format-time";
 import {
   shortenAddress,
   stellarExpertTxUrl,
@@ -162,7 +163,7 @@ export function TipWall({ slug }: Props) {
   }, [slug, state, fetchMessages]);
 
   return (
-    <Card padding="lg">
+    <Card padding="lg" className="flex h-full min-h-[22rem] flex-col">
       <div className="flex items-start justify-between mb-5">
         <div>
           <h2 className="font-display text-2xl">Tipping wall</h2>
@@ -188,42 +189,48 @@ export function TipWall({ slug }: Props) {
         </div>
       </div>
 
-      {state.kind === "loading" && (
-        <div className="space-y-4">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
-      )}
+      {/* relative+absolute: the list never drives the card height, so the card
+          matches the tip box and the list scrolls inside it. */}
+      <div className="relative min-h-0 flex-1">
+        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden pr-1">
+          {state.kind === "loading" && (
+            <div className="space-y-4">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          )}
 
-      {state.kind === "error" && (
-        <p className="text-sm text-[var(--color-error)]">{state.message}</p>
-      )}
+          {state.kind === "error" && (
+            <p className="text-sm text-[var(--color-error)]">{state.message}</p>
+          )}
 
-      {state.kind === "loaded" &&
-        state.messages.length === 0 &&
-        !pendingSlot && (
-          <EmptyState
-            icon={<SparkleIcon />}
-            title="No tips yet"
-            description="Be the first — every message gets etched into the Stellar ledger."
-            className="border-none bg-transparent p-4"
-          />
-        )}
-
-      {state.kind === "loaded" &&
-        (state.messages.length > 0 || pendingSlot) && (
-          <ul className="space-y-4">
-            {pendingSlot && <PendingTipSlot />}
-            {state.messages.map((msg) => (
-              <TipWallItem
-                key={`${msg.txHash}-${msg.timestamp}`}
-                msg={msg}
-                fresh={freshTxHashes.has(msg.txHash)}
+          {state.kind === "loaded" &&
+            state.messages.length === 0 &&
+            !pendingSlot && (
+              <EmptyState
+                icon={<SparkleIcon />}
+                title="No tips yet"
+                description="Be the first — every message gets etched into the Stellar ledger."
+                className="border-none bg-transparent p-4"
               />
-            ))}
-          </ul>
-        )}
+            )}
+
+          {state.kind === "loaded" &&
+            (state.messages.length > 0 || pendingSlot) && (
+              <ul className="space-y-4">
+                {pendingSlot && <PendingTipSlot />}
+                {state.messages.map((msg) => (
+                  <TipWallItem
+                    key={`${msg.txHash}-${msg.timestamp}`}
+                    msg={msg}
+                    fresh={freshTxHashes.has(msg.txHash)}
+                  />
+                ))}
+              </ul>
+            )}
+        </div>
+      </div>
     </Card>
   );
 }
@@ -244,7 +251,7 @@ function PendingTipSlot() {
 
 function TipWallItem({ msg, fresh }: { msg: WallMessage; fresh: boolean }) {
   const hasNote = msg.note.trim().length > 0;
-  const when = formatTimestamp(msg.timestamp);
+  const when = formatRelativeTime(msg.timestamp);
 
   return (
     <li
@@ -283,21 +290,4 @@ function TipWallItem({ msg, fresh }: { msg: WallMessage; fresh: boolean }) {
       )}
     </li>
   );
-}
-
-function formatTimestamp(timestamp: string): string {
-  const ms = Number(BigInt(timestamp)) * 1000;
-  const diff = Date.now() - ms;
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return "just now";
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return new Date(ms).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
 }

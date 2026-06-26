@@ -1,0 +1,7 @@
+# Rust build output
+target
+
+# Local settings
+.soroban
+.stellar
+.contract_id

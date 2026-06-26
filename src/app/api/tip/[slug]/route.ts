@@ -2,6 +2,8 @@ import type { HTTPRequestContext } from "@x402/core/server";
 import { badRequest, notFound, parseJsonBody } from "@/lib/api-helpers";
 import { getCreatorsStore, validateSlug } from "@/lib/creators";
 import { NextHTTPAdapter } from "@/lib/next-http-adapter";
+import { bytes32ToField, hexToBytes } from "@/lib/patronage/fields";
+import { depositCommitment } from "@/lib/patronage/server";
 import { clientKeyFromRequest, rateLimit } from "@/lib/rate-limit";
 import { isValidStellarAddress, usdcToStroops } from "@/lib/stellar";
 import { DEFAULT_TIP_AMOUNT, TIP_MESSAGE_MAX } from "@/lib/tip-limits";
@@ -19,6 +21,12 @@ type TipBody = {
   message?: string;
   from?: string;
   amount?: string;
+  /**
+   * Optional anonymous-patronage commitment (32 bytes hex), computed client-side
+   * as Poseidon(nullifier, secret, creator). If present, it is appended to the
+   * patronage pool after the tip settles, enabling a later anonymous post.
+   */
+  commitment?: string;
 };
 
 /**
@@ -155,12 +163,30 @@ export async function POST(
     }
   }
 
+  // Anonymous-patronage: append the supporter's commitment to the pool so they
+  // can later post an anonymous, proof-backed message. Non-blocking — the tip
+  // already settled; a failed deposit just means no anonymous post for this tip.
+  let depositedToPool: boolean | null = null;
+  if (
+    typeof body.commitment === "string" &&
+    /^[0-9a-fA-F]{64}$/.test(body.commitment)
+  ) {
+    const dep = await depositCommitment(
+      bytes32ToField(hexToBytes(body.commitment)),
+    );
+    depositedToPool = dep.ok;
+    if (!dep.ok) {
+      console.error(`[tip/${creator.slug}] pool deposit failed: ${dep.error}`);
+    }
+  }
+
   const responseBody = {
     ok: true,
     slug: creator.slug,
     recipient: creator.walletAddress,
     paidAt: new Date().toISOString(),
     recordedOnChain,
+    depositedToPool,
     txHash: settlementTxHash,
     ...(recordError ? { recordError } : {}),
   };

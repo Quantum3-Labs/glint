@@ -17,7 +17,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          # Version comes from package.json "packageManager" (single source of
+          # truth). Specifying it here too triggers ERR_PNPM_BAD_PM_VERSION.
           run_install: false
 
       - name: Setup Node.js
@@ -79,11 +80,23 @@ jobs:
             .
 
           docker push ${IMAGE}:${SHORT_SHA}
-          docker push ${IMAGE}:latest
+          # Only main owns the :latest tag; branch/manual builds don't move it.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            docker push ${IMAGE}:latest
+          fi
 
       - name: Deploy to Cloud Run
         run: |
           IMAGE=${{ vars.GCP_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_REPOSITORY }}/${{ vars.GCP_APP_NAME }}
+
+          # Pushes to main take live traffic. Manual runs (workflow_dispatch,
+          # from any branch) deploy a no-traffic "preview" revision with its own
+          # URL, so you can test a branch without touching production.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TRAFFIC_FLAGS=""
+          else
+            TRAFFIC_FLAGS="--tag=preview --no-traffic"
+          fi
 
           gcloud run deploy ${{ vars.GCP_APP_NAME }} \
             --image=${IMAGE}:${SHORT_SHA} \
@@ -91,11 +104,19 @@ jobs:
             --platform=managed \
             --port=3000 \
             --service-account=${{ vars.GCP_SERVICE_ACCOUNT_NAME }}@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-            --set-env-vars=STORE_TYPE=firestore,X402_STELLAR_NETWORK=stellar:testnet,TIPJAR_CONTRACT_ID=${{ vars.TIPJAR_CONTRACT_ID }},NEXT_TELEMETRY_DISABLED=1 \
+            --set-env-vars=STORE_TYPE=firestore,X402_STELLAR_NETWORK=stellar:testnet,TIPJAR_CONTRACT_ID=${{ vars.TIPJAR_CONTRACT_ID }},PATRONAGE_CONTRACT_ID=${{ vars.PATRONAGE_CONTRACT_ID }},NEXT_TELEMETRY_DISABLED=1 \
             --set-secrets=TEST_MNEMONIC=TEST_MNEMONIC:latest \
             --allow-unauthenticated \
             --min-instances=0 \
             --max-instances=3 \
             --cpu=1 \
             --memory=512Mi \
-            --timeout=60s
+            --timeout=60s \
+            $TRAFFIC_FLAGS
+
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "Preview revision deployed with NO traffic. Tagged URLs:"
+            gcloud run services describe ${{ vars.GCP_APP_NAME }} \
+              --region=${{ vars.GCP_LOCATION }} \
+              --format='table(status.traffic.tag, status.traffic.url)'
+          fi

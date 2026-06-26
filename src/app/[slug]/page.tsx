@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { AnonPostForm } from "@/components/creator/AnonPostForm";
+import { AnonWall } from "@/components/creator/AnonWall";
 import { ShareButton } from "@/components/creator/ShareButton";
 import { SocialLinks } from "@/components/creator/SocialLinks";
 import { TipForm } from "@/components/creator/TipForm";
@@ -61,6 +63,12 @@ export default async function CreatorPage({
       <section className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
         <TipForm slug={creator.slug} displayName={creator.displayName} />
         <TipWall slug={creator.slug} />
+      </section>
+
+      {/* Anonymous patronage (ZK): post as a verified supporter + anonymous wall */}
+      <section className="grid lg:grid-cols-[1.1fr_1fr] gap-6 mt-6">
+        <AnonPostForm slug={creator.slug} />
+        <AnonWall slug={creator.slug} />
       </section>
     </PageShell>
   );

@@ -1,0 +1,9 @@
+[package]
+name = "glint_patronage"
+type = "bin"
+authors = ["Glint"]
+# Pinned to match the on-chain UltraHonk verifier (nargo 1.0.0-beta.9 + bb 0.87.0).
+# Building with a different toolchain can produce a proof/vk the verifier rejects.
+
+[dependencies]
+poseidon = { tag = "v0.2.0", git = "https://github.com/noir-lang/poseidon" }
