@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { stellarExpertTxUrl } from "../stellar";
 import { TIP_SENT_EVENT, type TipSentDetail } from "../tip-events";
 import { generatePostProof } from "./client";
 import { friendlyError } from "./errors";
@@ -123,8 +124,16 @@ export function usePatronagePost(slug: string) {
           throw new Error(result.error ?? "post failed");
         }
 
+        const txHash: string | undefined = result.txHash;
         toast.success("Anonymous message posted", {
-          description: "It is verified on-chain but unlinkable to your wallet.",
+          description: "Verified on-chain, unlinkable to your wallet.",
+          action: txHash
+            ? {
+                label: "View tx",
+                onClick: () =>
+                  window.open(stellarExpertTxUrl(txHash), "_blank"),
+              }
+            : undefined,
         });
         removeNote(note.commitmentHex); // spent — drop it from the list
         refreshNotes();
