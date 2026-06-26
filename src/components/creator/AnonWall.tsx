@@ -46,7 +46,7 @@ export function AnonWall({ slug }: { slug: string }) {
   }, [slug, load]);
 
   return (
-    <Card padding="lg">
+    <Card padding="lg" className="flex h-full min-h-[22rem] flex-col">
       <div className="flex items-baseline justify-between mb-5">
         <h2 className="font-display text-2xl">Anonymous wall</h2>
         <span className="text-xs text-[var(--color-ink-muted)]">
@@ -54,34 +54,40 @@ export function AnonWall({ slug }: { slug: string }) {
         </span>
       </div>
 
-      {loading ? (
-        <p className="text-sm text-[var(--color-ink-muted)]">Loading…</p>
-      ) : messages.length === 0 ? (
-        <EmptyState
-          title="No anonymous messages yet"
-          description="Supporters who tipped can post a verified message here without revealing their wallet."
-          className="border-none p-0 bg-transparent"
-        />
-      ) : (
-        <ul className="space-y-4 max-h-[32rem] overflow-y-auto pr-1">
-          {messages
-            .slice()
-            .reverse()
-            .map((m, i) => (
-              <li
-                key={`${m.timestamp}-${i}`}
-                className="pb-4 border-b border-[var(--color-border)] last:border-0 last:pb-0"
-              >
-                <div className="text-xs text-[var(--color-ink-muted)] mb-1">
-                  verified supporter · {formatRelativeTime(m.timestamp)}
-                </div>
-                <p className="pl-3 border-l-2 border-[var(--color-accent)] text-sm text-[var(--color-ink-soft)] whitespace-pre-wrap break-words">
-                  {m.message}
-                </p>
-              </li>
-            ))}
-        </ul>
-      )}
+      {/* relative+absolute: the list never drives the card height, so the card
+          matches the adjacent box and the list scrolls inside it. */}
+      <div className="relative min-h-0 flex-1">
+        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden pr-1">
+          {loading ? (
+            <p className="text-sm text-[var(--color-ink-muted)]">Loading…</p>
+          ) : messages.length === 0 ? (
+            <EmptyState
+              title="No anonymous messages yet"
+              description="Supporters who tipped can post a verified message here without revealing their wallet."
+              className="border-none p-0 bg-transparent"
+            />
+          ) : (
+            <ul className="space-y-4">
+              {messages
+                .slice()
+                .reverse()
+                .map((m, i) => (
+                  <li
+                    key={`${m.timestamp}-${i}`}
+                    className="pb-4 border-b border-[var(--color-border)] last:border-0 last:pb-0"
+                  >
+                    <div className="text-xs text-[var(--color-ink-muted)] mb-1">
+                      verified supporter · {formatRelativeTime(m.timestamp)}
+                    </div>
+                    <p className="pl-3 border-l-2 border-[var(--color-accent)] text-sm text-[var(--color-ink-soft)] whitespace-pre-wrap break-words">
+                      {m.message}
+                    </p>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }

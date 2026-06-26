@@ -163,7 +163,7 @@ export function TipWall({ slug }: Props) {
   }, [slug, state, fetchMessages]);
 
   return (
-    <Card padding="lg">
+    <Card padding="lg" className="flex h-full min-h-[22rem] flex-col">
       <div className="flex items-start justify-between mb-5">
         <div>
           <h2 className="font-display text-2xl">Tipping wall</h2>
@@ -189,42 +189,48 @@ export function TipWall({ slug }: Props) {
         </div>
       </div>
 
-      {state.kind === "loading" && (
-        <div className="space-y-4">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
-      )}
+      {/* relative+absolute: the list never drives the card height, so the card
+          matches the tip box and the list scrolls inside it. */}
+      <div className="relative min-h-0 flex-1">
+        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden pr-1">
+          {state.kind === "loading" && (
+            <div className="space-y-4">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          )}
 
-      {state.kind === "error" && (
-        <p className="text-sm text-[var(--color-error)]">{state.message}</p>
-      )}
+          {state.kind === "error" && (
+            <p className="text-sm text-[var(--color-error)]">{state.message}</p>
+          )}
 
-      {state.kind === "loaded" &&
-        state.messages.length === 0 &&
-        !pendingSlot && (
-          <EmptyState
-            icon={<SparkleIcon />}
-            title="No tips yet"
-            description="Be the first — every message gets etched into the Stellar ledger."
-            className="border-none bg-transparent p-4"
-          />
-        )}
-
-      {state.kind === "loaded" &&
-        (state.messages.length > 0 || pendingSlot) && (
-          <ul className="space-y-4 max-h-[32rem] overflow-y-auto pr-1">
-            {pendingSlot && <PendingTipSlot />}
-            {state.messages.map((msg) => (
-              <TipWallItem
-                key={`${msg.txHash}-${msg.timestamp}`}
-                msg={msg}
-                fresh={freshTxHashes.has(msg.txHash)}
+          {state.kind === "loaded" &&
+            state.messages.length === 0 &&
+            !pendingSlot && (
+              <EmptyState
+                icon={<SparkleIcon />}
+                title="No tips yet"
+                description="Be the first — every message gets etched into the Stellar ledger."
+                className="border-none bg-transparent p-4"
               />
-            ))}
-          </ul>
-        )}
+            )}
+
+          {state.kind === "loaded" &&
+            (state.messages.length > 0 || pendingSlot) && (
+              <ul className="space-y-4">
+                {pendingSlot && <PendingTipSlot />}
+                {state.messages.map((msg) => (
+                  <TipWallItem
+                    key={`${msg.txHash}-${msg.timestamp}`}
+                    msg={msg}
+                    fresh={freshTxHashes.has(msg.txHash)}
+                  />
+                ))}
+              </ul>
+            )}
+        </div>
+      </div>
     </Card>
   );
 }
