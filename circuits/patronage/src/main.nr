@@ -1,34 +1,36 @@
-// Glint anonymous patronage circuit.
+// Glint private patronage circuit (unified).
 //
-// Statement proved by a supporter (the tipper), without revealing which wallet
-// or which payment was theirs:
+// One circuit serves every anonymous action a supporter can take from a single
+// deposit: WITHDRAW (private payment to the creator), MESSAGE (anonymous wall
+// post), and VOTE (anonymous poll vote). A `domain` separates the nullifiers so
+// each action is independently single-use off one deposit.
+//
+// Statement proved (without revealing which wallet or deposit was theirs):
 //
 //   "I know the secret behind a commitment that
-//      (a) is a member of the patronage Merkle tree with root `root`, and
+//      (a) is a member of the tier-`tier` Merkle tree with root `root`, and
 //      (b) was deposited for creator `creator`,
-//    and here is its single-use `nullifier_hash` and the `msg_hash` of the
-//    message I am about to post."
+//    and here is the single-use `nullifier_hash` for action `domain`/`sub_id`,
+//    bound to `action_data`."
 //
 // Design notes (read before changing):
 //
-// * GLOBAL POOL. Every tip (for any creator) is committed into one Merkle tree,
-//   so the anonymity set is every depositor, not just this creator's. `creator`
-//   is a PUBLIC input: we reveal *which* creator the support is for (that is not
-//   secret) while hiding *who* sent it.
+// * TIER POOLS. Each fixed denomination has its own Merkle tree. `tier` is bound
+//   into the commitment AND exposed as a public input, so a proof built for a
+//   $1 deposit cannot be replayed to withdraw a $10 payout. The contract checks
+//   `root` against the known roots of that tier's tree and pays `tier`'s amount.
 //
-// * AMOUNT IS NOT IN THE COMMITMENT. The Glint server deposits the commitment
-//   after settling the x402 payment, so it knows the real amount -- but it does
-//   NOT know the secret, so it cannot check a hidden amount inside the leaf. A
-//   client could therefore lie about a hidden amount. The honest way to support
-//   a "tipped >= $X" claim is TIER POOLS: one tree per amount tier, and the
-//   server deposits into the tier matching the real settled amount. "Tipped
-//   >= $X to creator C" then becomes "membership in tier-X tree for creator C".
-//   This scaffold models a single tier; `tier`/multi-tree is the next step.
+// * DOMAIN-SEPARATED NULLIFIERS. nullifier_hash = H(nullifier, domain, sub_id).
+//   - WITHDRAW: domain=1, sub_id=0  -> one private payment per deposit.
+//   - MESSAGE:  domain=2, sub_id=0  -> one anonymous message per deposit.
+//   - VOTE:     domain=3, sub_id=poll_id -> one vote per (deposit, poll).
+//   Different domains yield different nullifiers, so the same deposit can do all
+//   three, each exactly once.
 //
-// * MESSAGE BINDING. `msg_hash` is a public input. The contract recomputes
-//   hash(message) on-chain and asserts it equals `msg_hash`, so a relayer cannot
-//   swap the message. The circuit only needs to expose `msg_hash` and keep it
-//   bound into the proof (see the no-op constraint below).
+// * ACTION BINDING. `action_data` is a public input the contract interprets per
+//   domain (recipient for WITHDRAW, msg_hash for MESSAGE, vote choice for VOTE).
+//   The circuit only keeps it bound into the proof so a relayer cannot swap it;
+//   the semantic check happens on-chain.
 
 use dep::poseidon::poseidon2::Poseidon2;
 
@@ -64,28 +66,29 @@ pub fn main(
     root: pub Field,
     nullifier_hash: pub Field,
     creator: pub Field,
-    msg_hash: pub Field,
+    tier: pub Field,
+    domain: pub Field,
+    sub_id: pub Field,
+    action_data: pub Field,
     // --- private inputs ---
     nullifier: Field,
     secret: Field,
     path_siblings: [Field; 20],
     path_bits: [Field; 20],
 ) {
-    // Commitment binds the supporter's secret to the creator they backed.
-    let leaf = Poseidon2::hash([nullifier, secret, creator], 3);
+    // Commitment binds the supporter's secret to the creator and tier they backed.
+    let leaf = Poseidon2::hash([nullifier, secret, creator, tier], 4);
 
-    // One post per tip: nullifier_hash = H(nullifier, 0).
-    let nf = hash2(nullifier, 0);
+    // Per-action nullifier: H(nullifier, domain, sub_id).
+    let nf = Poseidon2::hash([nullifier, domain, sub_id], 3);
     assert(nf == nullifier_hash);
 
-    // Membership: the commitment is in the tree with the given root.
+    // Membership: the commitment is in the tier tree with the given root.
     let computed_root = compute_root(leaf, path_siblings, path_bits);
     assert(computed_root == root);
 
-    // Keep `msg_hash` bound into the proof so the compiler cannot prune it.
-    // The actual message<->hash check happens on-chain in the contract.
-    // TODO(scaffold): verify this survives Noir optimization (print the ABI /
-    // public_inputs count) before relying on it for tamper-resistance.
-    let bind = msg_hash * msg_hash;
-    assert(bind == msg_hash * msg_hash);
+    // Keep `action_data` bound into the proof so the compiler cannot prune it.
+    // The semantic check (recipient / msg_hash / choice) happens on-chain.
+    let bind = action_data * action_data;
+    assert(bind == action_data * action_data);
 }
