@@ -35,9 +35,9 @@ export async function POST(request: Request) {
   const { publicInputsHex, proofHex, message } = body;
   if (
     typeof publicInputsHex !== "string" ||
-    !/^[0-9a-fA-F]{256}$/.test(publicInputsHex)
+    !/^[0-9a-fA-F]{448}$/.test(publicInputsHex)
   ) {
-    return badRequest("publicInputsHex must be 128 bytes hex");
+    return badRequest("publicInputsHex must be 224 bytes hex");
   }
   if (typeof proofHex !== "string" || !/^[0-9a-fA-F]+$/.test(proofHex)) {
     return badRequest("proofHex must be hex");

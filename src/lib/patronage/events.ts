@@ -1,5 +1,5 @@
 /**
- * Cross-component event so AnonWall can refetch after AnonPostForm posts an
+ * Cross-component event so AnonWall can refetch after a supporter posts an
  * anonymous message, without lifting state across sibling components.
  */
 

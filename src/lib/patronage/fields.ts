@@ -67,3 +67,35 @@ export function creatorField(slug: string): bigint {
 export function messageHashField(message: string): bigint {
   return keccakField(new TextEncoder().encode(message));
 }
+
+/**
+ * Action domains for nullifier separation. MUST match the circuit and contract.
+ */
+export const DOMAIN = {
+  WITHDRAW: 1n,
+  MESSAGE: 2n,
+  VOTE: 3n,
+} as const;
+
+/**
+ * Allowed deposit tiers in USDC stroops (7 decimals). MUST match the contract's
+ * `is_valid_tier`. The tier value is also the withdraw payout amount.
+ */
+export const TIERS = {
+  "0.1": 1_000_000n,
+  "1": 10_000_000n,
+  "5": 50_000_000n,
+  "10": 100_000_000n,
+  "100": 1_000_000_000n,
+} as const;
+
+export type TierKey = keyof typeof TIERS;
+
+/** Display order (object key order is unreliable for numeric-like keys). */
+export const TIER_ORDER: readonly TierKey[] = ["0.1", "1", "5", "10", "100"];
+
+export const TIER_AMOUNTS: readonly bigint[] = TIER_ORDER.map((k) => TIERS[k]);
+
+export function isValidTier(amount: bigint): boolean {
+  return TIER_AMOUNTS.includes(amount);
+}
