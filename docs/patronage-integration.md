@@ -1,160 +1,116 @@
-# Anonymous Patronage — Integration Guide
+# Private Patronage — Integration Guide
 
-ZK feature: let a supporter prove "I tipped this creator" and post a **verified
-anonymous** message, without revealing their wallet or payment. "Patronage" =
-backing a creator financially; this makes that support *speak anonymously*.
-
-Feasibility + on-chain cost are validated on testnet — see
-[`zk-hackathon-feasibility.md`](./zk-hackathon-feasibility.md) (full withdraw
-83.77M / 100M instructions).
+ZK feature: one private deposit lets a supporter take several **anonymous,
+proof-backed** actions for a creator — pay them privately, post a verified
+anonymous message, and vote in polls — none of it linkable to their wallet.
 
 ## Architecture
 
 ```
-Tip time (TipForm)                 Post time (AnonPostForm → usePatronagePost)
-  client builds note                 client fetches leaf list  ──> /api/patronage/leaves
-  commitment ──> /api/tip/[slug] ─┐  client rebuilds the Merkle path + generates the
-                                  │    UltraHonk proof in-browser (noir_js + bb.js)
-  server deposits commitment  <───┘  proof + message ──────────> /api/patronage/post
-  into patronage pool                server relays post() on-chain
-                                     AnonWall reads get_wall  <── /api/patronage/wall/[slug]
+Deposit (PrivatePatronage)            Actions (usePatronage)
+  client builds note + commitment       client fetches tier leaves ─> /api/patronage/leaves?tier=
+  Freighter signs deposit(from,         client rebuilds Merkle path + generates the
+    tier, commitment) ──> POOL            UltraHonk proof in-browser (noir_js + bb.js)
+  USDC pulled into the pool             proof ─> /api/patronage/{withdraw,post,vote}
+                                          server relays the tx (source ≠ depositor)
+                                        AnonWall / Polls read ─> /api/patronage/{wall,poll}/[slug]
 ```
 
 The server runs **no bb.js**: it only returns the raw leaf list; the path is
 rebuilt in the browser (which already loads bb.js for proving).
 
-- **Global pool**, one Merkle tree across all creators (max anonymity set).
-- **Commitment** = `Poseidon(nullifier, secret, creator)`, built client-side.
-- **`deposit`** is admin-gated (server, after x402 settles). **`post`** is open
-  (trust = proof + nullifier); the server relays it so the tx source is unlinkable.
-- **Message binding**: `msg_hash` is a public input; the contract checks
-  `keccak256(message) mod r == msg_hash`.
+- **Tier pools.** Each fixed denomination ($0.1/$1/$5/$10/$100) has its own Merkle tree.
+  `tier` is bound into the commitment AND a public input, so a $1 deposit can't
+  withdraw $10.
+- **Commitment** = `Poseidon(nullifier, secret, creator, tier)`, built client-side.
+- **Deposit** is signed by the supporter (Freighter) — the pool custodies the
+  USDC. No x402, no server. `withdraw` / `post` / `vote` are relayed by the
+  server so the tx source is unlinkable; trust = proof + single-use nullifier.
+- **Domain-separated nullifiers**: `nullifier_hash = H(nullifier, domain, sub_id)`
+  — WITHDRAW(1), MESSAGE(2), VOTE(3, sub_id = poll). One deposit does each once.
+- **Payout binding**: `creator = keccak256(slug)` is not a wallet, so the admin
+  registers `creator -> wallet` (`register_payout`); `withdraw` pays that wallet.
+- **Action binding**: `action_data` (public) is recipient-less for withdraw,
+  `keccak256(message)` for message, the vote choice for vote — checked on-chain.
 
-## How it works — and why it MUST be two steps
+## Unified circuit
 
-The tip and the anonymous post are deliberately separate user actions. This is
-the security model, not UX friction:
-
-- A **tip is a public, wallet-signed payment** (x402, your wallet → creator). It
-  reveals your wallet on-chain — that is unavoidable.
-- If the anonymous message rode along *with* the tip, anyone could link
-  `your wallet → that message`. No anonymity.
-- So the pool splits it: the tip **deposits a commitment** (linkable to you), and
-  **later** you prove "I am *one of* the depositors for this creator" + reveal a
-  one-time `nullifier`, **without revealing which deposit is yours**. Anonymity =
-  the set of all depositors + decoupling the post from the deposit (timing,
-  session). Auto-posting right after a tip would re-link the two and defeat it.
-
-**Anti-spam (Sybil resistance):** each deposit note carries a unique `nullifier`,
-and the contract rejects a reused one — so **one tip = exactly one anonymous post**.
-Posting more messages requires more tips (real USDC). Tip N times → N independent
-notes → N posts; the posts are not linkable to each other either.
+Public inputs (positional): `[root, nullifier_hash, creator, tier, domain,
+sub_id, action_data]`. One circuit + one VK + one verifier instance serve all
+three actions. See `circuits/patronage/src/main.nr`.
 
 ## Files
 
 | Path | Role |
 |---|---|
-| `circuits/patronage/` | Noir circuit (membership + nullifier + creator + msg bind) |
-| `contracts/patronage/` | Soroban pool contract (`deposit`, `post`, `get_wall`, …) |
-| `src/lib/patronage/fields.ts` | field/keccak helpers (creator + msg_hash) |
-| `src/lib/patronage/poseidon.ts` | Poseidon2 via @aztec/bb.js (matches the circuit + contract) |
+| `circuits/patronage/` | Noir unified circuit (membership + domain nullifier + tier + action bind) |
+| `contracts/patronage/` | Soroban pool: `deposit`, `withdraw`, `post`, `vote`, `register_payout`, `create_poll`, reads |
+| `src/lib/patronage/fields.ts` | field/keccak helpers + `DOMAIN` + `TIERS` |
+| `src/lib/patronage/poseidon.ts` | Poseidon2 via bb.js (commitment + domain nullifier) |
 | `src/lib/patronage/merkle.ts` | client-side Merkle-path rebuild (bb.js) |
-| `src/lib/patronage/server.ts` | server client: deposit / post / wall reads / leaf list (no bb.js) |
-| `src/lib/patronage/client.ts` | browser: note gen + UltraHonk proof |
-| `src/lib/patronage/notes.ts` | localStorage deposit-note storage |
-| `src/lib/patronage/errors.ts`, `events.ts` | friendly error mapping, cross-component event |
-| `src/lib/patronage/use-patronage-post.ts` | hook: notes + spent-filter + proof/relay flow |
-| `src/lib/soroban-tx.ts` | shared server-side Soroban tx helpers (TipJar + Patronage) |
-| `src/app/api/patronage/{leaves,post,wall,spent}/` | API routes |
-| `src/app/api/tip/[slug]/route.ts` | tip route, now deposits the commitment |
-| `src/components/creator/AnonPostForm.tsx`, `AnonWall.tsx` | UI |
-
-## Deployed (testnet)
-
-| What | Contract ID |
-|---|---|
-| Patronage pool (**demo**, admin = server keypair) | `CATIQJAXYI422JJJSZHUXMCDQA7TKITLNVNO7HPC2FWG6H6GCQBGUXAU` |
-| UltraHonk verifier (patronage vk) | `CBQRARZTFSB5VZD55UBCY4F2BH34QZ3A6AOBVNS2I2I6Y5QE6USYQTLJ` |
-
-The demo pool's admin is the Glint server keypair (`TEST_MNEMONIC` index 2,
-address `GA7EALDD5PJYUIJR6BHXAR7FN2XP6PSXWKVJXSSGDX5UWPPX4TFV3ATA`, friendbot-funded),
-so the app's `deposit` (admin) and `post` (relayer) both sign correctly.
+| `src/lib/patronage/client.ts` | browser: note gen + withdraw/message/vote proofs |
+| `src/lib/patronage/deposit.ts` | browser: Freighter-signed `deposit` into the pool |
+| `src/lib/patronage/server.ts` | server relay + admin + reads (no bb.js) |
+| `src/lib/patronage/use-patronage.ts` | hook: notes + spent-filter + deposit/withdraw/message/vote |
+| `src/lib/polls.ts` | poll metadata store (JSON / Firestore) |
+| `src/app/api/patronage/{config,leaves,withdraw,post,vote,spent,wall,poll,register}/` | API routes |
+| `src/components/creator/PrivatePatronage.tsx`, `PatronagePolls.tsx`, `AnonWall.tsx` | supporter UI |
+| `src/components/creator/dashboard/PatronageAdmin.tsx` | creator UI (enable payout + open polls) |
 
 ## Env vars
 
 ```
-PATRONAGE_CONTRACT_ID=C...          # the pool contract
-TEST_MNEMONIC=...                   # server signer (reused from TipJar) = pool admin
-SERVER_ACCOUNT_INDEX=2              # reused from TipJar
+PATRONAGE_CONTRACT_ID=C...          # the pool contract (server + /api/patronage/config)
+TEST_MNEMONIC=...                   # server signer = pool admin + relayer
+SERVER_ACCOUNT_INDEX=2
 NEXT_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+STORE_TYPE=firestore                # prod (polls + creators); JSON files for local dev
 ```
 
-## Build
+The browser reads the contract id from `/api/patronage/config` at runtime, so no
+`NEXT_PUBLIC_*` contract id is baked into the bundle (Cloud Run friendly).
+
+## Deploy
+
+The contract interface changed (USDC custody + multi-tier + voting), and the VK
+changed (7 public inputs) — **redeploy both the verifier and the pool**.
 
 ```bash
-# circuit -> vk
+# 1. circuit -> vk (7 public inputs)
 cd circuits/patronage && nargo compile && \
   bb write_vk --scheme ultra_honk --oracle_hash keccak \
-    --bytecode_path target/glint_patronage.json --output_path target --output_format bytes_and_fields
-# contract -> wasm
+    -b target/glint_patronage.json --output_format bytes_and_fields -o target
+
+# 2. deploy a verifier instance with this vk (rs-soroban-ultrahonk tooling)
+
+# 3. pool -> wasm, deploy with constructor(admin, verifier, token)
 cd contracts/patronage && stellar contract build
-# JS deps
-pnpm install
+stellar contract deploy --wasm target/.../patronage.wasm -- \
+  --admin <SERVER_PUBKEY> --verifier <VERIFIER_ID> --token <USDC_SAC>
+
+# 4. set PATRONAGE_CONTRACT_ID (GitHub var + .env.local)
 ```
 
-## What is validated (and how)
+Per creator: open the dashboard and click **Enable / re-register payout** (calls
+`register_payout`), then optionally **Open a poll**. Supporters need a USDC
+trustline + testnet USDC to deposit.
 
-Tested against live testnet — not just typecheck:
+## Validation
 
-- **Contract** (`deposit`, `post`, `get_wall`, `get_root`, `get_leaves`) — real txs.
-- **Circuit + UltraHonk proof** — proof verifies on-chain inside `post`.
-- **Poseidon** matches across bb.js ↔ Noir ↔ Rust contract (`scripts/poseidon-check.ts`,
-  and JS-rebuilt Merkle root == on-chain root).
-- **`/api/patronage/leaves`** over HTTP (real `next` runtime) returns the leaf
-  list; the client-side `buildMerklePath` was checked against the on-chain root
-  for a multi-leaf tree.
-- **`/api/patronage/post`** over HTTP: server relayed the proof, it verified
-  on-chain, and the message appeared on the wall (`txHash` returned, 200).
-- **`next build`** compiles the whole app including the ZK client bundle.
-- Build config: `serverExternalPackages: ["@aztec/bb.js", "@noir-lang/noir_js"]`
-  in `next.config.ts` (kept as a safety belt — bb.js now runs only client-side).
+- `pnpm tsc --noEmit`, `pnpm biome check`, and `pnpm build` are clean.
+- Contract compiles to wasm; circuit compiles; Poseidon (commitment + nullifier)
+  matches bb.js ↔ Noir ↔ Rust (`scripts/poseidon-check.ts`).
+- `scripts/patronage-e2e.ts` drives the message flow end-to-end on testnet
+  (deposit → Merkle path → UltraHonk proof → on-chain `post` → wall). Set
+  `USDC_SAC` for your environment before running.
 
-**Browser-validated (manual pass on testnet).** The full UI flow was run in a real
-browser with Freighter: tipped a creator (commitment generated client-side with
-bb.js + deposited), then posted an anonymous message (proof generated **in the
-browser**, relayed, verified on-chain) — the message appeared on the Anonymous
-wall as a "verified supporter", with no wallet shown.
+## Current limitations (by design)
 
-Known UX gap: after tipping, `AnonPostForm` only reads the saved note on mount, so
-it needs a page refresh to unlock. Wiring it to the existing `tip-sent` event would
-make it live.
-
-To run: set `PATRONAGE_CONTRACT_ID` (demo pool above) in `.env.local`, `pnpm dev`,
-open a creator page, tip, then post anonymously.
-
-## Reference: full pipeline proven via script
-
-`scripts/patronage-e2e.ts` runs the whole flow on testnet
-(commitment → deposit → Merkle path → UltraHonk proof → on-chain `post` → wall):
-
-- **Poseidon matches across all three impls.** `@aztec/bb.js poseidon2Hash` is
-  byte-for-byte identical to the Noir circuit and the Rust contract — verified by
-  `scripts/poseidon-check.ts` and by the JS-rebuilt Merkle root matching the
-  on-chain root exactly. `poseidon.ts` uses bb.js directly (no stub).
-- **Proof verifies on-chain.** `post` succeeded: the UltraHonk proof verified, the
-  Merkle root matched, the nullifier was recorded, and the `keccak256(message)`
-  binding passed — the message appeared on the wall.
-- Example run: pool `CBLVZH2WUIV2XF4L4U3XUY72B2IB5BQGD42CLNJFNVTDEAHWMPAEIN5Y`,
-  post tx `e861aa8a40f422848a51886b6e1dec78953fa315d283aceab0843adaa4344ab0`.
-
-## Current limitations (by design, stated plainly)
-
-- **Single tier.** "Tipped >= $X" amount tiers (one tree per tier) are not built;
-  the pool proves "verified supporter of creator C". Hidden per-commitment amounts
-  are intentionally avoided (the server cannot verify a hidden amount).
+- **Five tiers** ($0.1/$1/$5/$10/$100). Add denominations in `fields.ts` `TIERS` +
+  contract `is_valid_tier`.
 - **Root history is unbounded** (`KnownRoot` never evicts) — fine for a demo.
-- **Note backup**: the deposit note (secret) is localStorage-only; losing it (clear
-  cache / other browser) means losing the ability to post. Add an export/download.
-- **Live unlock**: `AnonPostForm` needs a page refresh after a tip (see above).
-- The demo pool + verifier run on **testnet** with the dev server keypair as admin.
-  Redeploy fresh for any other environment.
+- **Note backup**: the deposit note (secret) is localStorage-only; losing it
+  means losing the ability to act on that deposit. Add an export/download.
+- **Anonymity needs time**: depositing then immediately withdrawing in an empty
+  pool links the two by timing. The set grows with depositors.
+- Testnet only, dev server keypair as admin/relayer. Redeploy fresh elsewhere.
