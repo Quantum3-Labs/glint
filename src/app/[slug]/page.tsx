@@ -73,7 +73,10 @@ export default async function CreatorPage({
           to your wallet.
         </p>
         <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
-          <PrivatePatronage slug={creator.slug} />
+          <PrivatePatronage
+            slug={creator.slug}
+            creatorWallet={creator.walletAddress}
+          />
           <AnonWall slug={creator.slug} />
         </div>
       </section>

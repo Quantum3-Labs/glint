@@ -7,10 +7,10 @@ import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 
 /**
- * Creator-side controls for private patronage:
- *  - Enable: register this wallet as the on-chain payout address, so anonymous
- *    withdrawals can pay the creator.
- *  - Open a poll: store the question/options and open it on-chain for voting.
+ * Creator-side control for private patronage: open a poll (store the
+ * question/options and open it on-chain) so supporters can vote anonymously.
+ * Private payments need no creator setup — the supporter binds the payout
+ * address into their proof.
  */
 export function PatronageAdmin({
   slug,
@@ -19,28 +19,9 @@ export function PatronageAdmin({
   slug: string;
   walletAddress: string;
 }) {
-  const [enabling, setEnabling] = useState(false);
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
   const [creating, setCreating] = useState(false);
-
-  async function enable() {
-    setEnabling(true);
-    try {
-      const res = await fetch(`/api/patronage/register/${slug}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error ?? "failed");
-      toast.success("Private patronage enabled for your page");
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setEnabling(false);
-    }
-  }
 
   async function createPoll() {
     const opts = options.map((o) => o.trim()).filter(Boolean);
@@ -75,20 +56,11 @@ export function PatronageAdmin({
     <Card padding="lg">
       <h3 className="font-display text-xl mb-1">Private patronage</h3>
       <p className="text-xs text-[var(--color-ink-muted)] mb-4">
-        Let supporters fund you, message, and vote anonymously.
+        Supporters fund you, message, and vote anonymously — no setup needed.
+        Open a poll below to collect anonymous votes.
       </p>
 
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        disabled={enabling}
-        onClick={enable}
-      >
-        {enabling ? <Spinner size={14} /> : "Enable / re-register payout"}
-      </Button>
-
-      <div className="mt-6 space-y-3">
+      <div className="space-y-3">
         <h4 className="text-sm font-medium">Open a poll</h4>
         <input
           value={question}

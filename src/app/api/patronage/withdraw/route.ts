@@ -3,10 +3,11 @@ import { badRequest, parseJsonBody, serverError } from "@/lib/api-helpers";
 import { hexToBytes } from "@/lib/patronage/fields";
 import { submitWithdraw } from "@/lib/patronage/server";
 import { clientKeyFromRequest, rateLimit } from "@/lib/rate-limit";
+import { isValidStellarAddress } from "@/lib/stellar";
 
 const RATE_LIMIT = { max: 5, windowMs: 60_000 };
 
-type Body = { publicInputsHex?: string; proofHex?: string };
+type Body = { publicInputsHex?: string; proofHex?: string; recipient?: string };
 
 /**
  * POST /api/patronage/withdraw
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
   const body = await parseJsonBody<Body>(request);
   if (!body) return badRequest("Invalid JSON body");
 
-  const { publicInputsHex, proofHex } = body;
+  const { publicInputsHex, proofHex, recipient } = body;
   if (
     typeof publicInputsHex !== "string" ||
     !/^[0-9a-fA-F]{448}$/.test(publicInputsHex)
@@ -41,11 +42,15 @@ export async function POST(request: Request) {
   if (typeof proofHex !== "string" || !/^[0-9a-fA-F]+$/.test(proofHex)) {
     return badRequest("proofHex must be hex");
   }
+  if (!isValidStellarAddress(recipient)) {
+    return badRequest("recipient must be a valid Stellar address");
+  }
 
   try {
     const result = await submitWithdraw(
       hexToBytes(publicInputsHex),
       hexToBytes(proofHex),
+      recipient,
     );
     if (!result.ok) {
       return NextResponse.json(

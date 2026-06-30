@@ -25,11 +25,12 @@ poll — none of it linkable to the depositor's wallet.
 - **Relayed actions.** `withdraw` / `post` / `vote` need no auth — trust is the
   ZK proof + single-use nullifier. The server relays them so the tx source does
   not link back to the supporter.
-- **Payout registry.** `creator` is `keccak256(slug)`, not a wallet, so the admin
-  registers `creator -> wallet` via `register_payout`; `withdraw` pays that
-  wallet. A relayer cannot redirect funds.
-- **Action binding.** `action_data` (public) is `keccak256(message)` for messages
-  and the vote choice for votes, checked on-chain.
+- **Recipient binding (no registry).** The depositor names the payout `recipient`
+  at withdraw time; it is bound into the proof via `action_data ==
+  keccak256(recipient_strkey) mod r`, so a relayer cannot redirect funds.
+- **Action binding.** `action_data` (public) is `keccak256(recipient)` for
+  withdraw, `keccak256(message)` for messages, the vote choice for votes —
+  checked on-chain.
 - **Root history.** Each deposit changes that tier's root; `KnownRoot(tier, root)`
   records every root so a proof against any past root still verifies.
 
@@ -38,10 +39,9 @@ poll — none of it linkable to the depositor's wallet.
 | fn | auth | purpose |
 |---|---|---|
 | `__constructor(admin, verifier, token)` | — | set admin, verifier, USDC SAC |
-| `register_payout(creator, wallet)` | admin | map a creator field to its payout wallet |
 | `create_poll(creator, poll_id, options)` | admin | open a poll with N choices |
 | `deposit(from, tier, commitment) -> u32` | from | pull USDC, append commitment, return leaf index |
-| `withdraw(public_inputs, proof)` | none | verify, pay the registered creator wallet `tier` |
+| `withdraw(public_inputs, proof, recipient)` | none | verify (recipient bound in proof), pay `recipient` `tier` |
 | `post(public_inputs, proof, message)` | none | verify, record an anonymous message |
 | `vote(public_inputs, proof, choice)` | none | verify, increment the poll tally |
 | `get_wall(creator) -> Vec<AnonMessage>` | none | a creator's anonymous wall (message + tier) |

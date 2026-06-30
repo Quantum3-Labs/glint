@@ -69,6 +69,15 @@ export function messageHashField(message: string): bigint {
 }
 
 /**
+ * Recipient binding for a private withdrawal: keccak256 of the address strkey
+ * (ASCII), mod r. MUST equal the contract's `address_field(recipient)` so the
+ * relayer cannot redirect the payout.
+ */
+export function recipientField(address: string): bigint {
+  return keccakField(new TextEncoder().encode(address));
+}
+
+/**
  * Action domains for nullifier separation. MUST match the circuit and contract.
  */
 export const DOMAIN = {

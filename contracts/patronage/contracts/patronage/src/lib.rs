@@ -89,7 +89,7 @@ pub enum Error {
     MessageHashMismatch = 10,
     InvalidTier = 11,
     WrongDomain = 12,
-    PayoutNotSet = 13,
+    RecipientMismatch = 13,
     PollNotFound = 14,
     InvalidChoice = 15,
     PollExists = 16,
@@ -123,8 +123,6 @@ pub enum DataKey {
     Nullifier(BytesN<32>),
     // ---- per-creator state ----
     Wall(BytesN<32>),
-    /// creator field -> payout wallet.
-    Payout(BytesN<32>),
     /// (creator, poll_id) -> number of options.
     Poll(BytesN<32>, u32),
     /// (creator, poll_id, choice) -> vote count.
@@ -242,6 +240,24 @@ fn message_hash_field(env: &Env, message: &Bytes) -> [u8; 32] {
     arr
 }
 
+/// keccak256(recipient strkey ASCII) reduced mod r. Matches the client's
+/// `keccakField(utf8(address))`, so the withdraw recipient binding passes.
+fn address_field(env: &Env, addr: &Address) -> [u8; 32] {
+    let s = addr.to_string();
+    let len = s.len() as usize;
+    // Strkeys are 56 chars (G.../C...), 69 for muxed (M...). Buffer covers all.
+    let mut buf = [0u8; 69];
+    s.copy_into_slice(&mut buf[..len]);
+    let bytes = Bytes::from_slice(env, &buf[..len]);
+    let digest = env.crypto().keccak256(&bytes);
+    let modulus = <BnScalar as Field>::modulus(env);
+    let reduced = U256::from_be_bytes(env, &Bytes::from_array(env, &digest.to_array()))
+        .rem_euclid(&modulus);
+    let mut arr = [0u8; 32];
+    reduced.to_be_bytes().copy_into_slice(&mut arr);
+    arr
+}
+
 #[contractimpl]
 impl Patronage {
     pub fn __constructor(
@@ -256,20 +272,6 @@ impl Patronage {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Verifier, &verifier);
         env.storage().instance().set(&DataKey::Token, &token);
-        Ok(())
-    }
-
-    /// Register the payout wallet for a creator field. Admin-only: the Glint
-    /// server maps `keccak256(slug)` to the creator's Stellar address.
-    pub fn register_payout(
-        env: Env,
-        creator: BytesN<32>,
-        wallet: Address,
-    ) -> Result<(), Error> {
-        Self::require_admin(&env)?;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Payout(creator), &wallet);
         Ok(())
     }
 
@@ -332,13 +334,19 @@ impl Patronage {
         Ok(idx)
     }
 
-    /// Privately pay the creator `tier` USDC from the pool.
+    /// Privately pay `recipient` `tier` USDC from the pool.
     ///
     /// `public_inputs` is [root, nullifier_hash, creator, tier, domain, sub_id,
     /// action_data]. Requires `domain == WITHDRAW`. No auth: trust comes from the
-    /// proof + single-use nullifier. The payout address is the registered wallet
-    /// for `creator`, so a relayer cannot redirect funds.
-    pub fn withdraw(env: Env, public_inputs: Bytes, proof_bytes: Bytes) -> Result<(), Error> {
+    /// proof + single-use nullifier. `recipient` is bound into the proof via
+    /// `action_data == keccak(recipient_strkey) mod r`, so a relayer cannot
+    /// redirect funds — the depositor chose the recipient when proving.
+    pub fn withdraw(
+        env: Env,
+        public_inputs: Bytes,
+        proof_bytes: Bytes,
+        recipient: Address,
+    ) -> Result<(), Error> {
         let pi = parse_public_inputs(&public_inputs)?;
         let domain = field_to_u64(&pi[4])?;
         if domain != DOMAIN_WITHDRAW {
@@ -350,17 +358,16 @@ impl Patronage {
             return Err(Error::InvalidTier);
         }
 
+        // Bind the recipient: action_data must equal keccak(recipient) mod r.
+        let expected = address_field(&env, &recipient);
+        if expected != pi[6] {
+            return Err(Error::RecipientMismatch);
+        }
+
         let nf = Self::consume_nullifier_check(&env, &pi[1])?;
         Self::check_known_root(&env, tier, &pi[0])?;
         Self::verify_proof(&env, &public_inputs, &proof_bytes)?;
 
-        // Pay the registered creator wallet.
-        let creator = BytesN::from_array(&env, &pi[2]);
-        let payout: Address = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Payout(creator))
-            .ok_or(Error::PayoutNotSet)?;
         let token: Address = env
             .storage()
             .instance()
@@ -368,7 +375,7 @@ impl Patronage {
             .ok_or(Error::NotInitialized)?;
         TokenClient::new(&env, &token).transfer(
             &env.current_contract_address(),
-            &payout,
+            &recipient,
             &tier,
         );
 

@@ -28,10 +28,13 @@ rebuilt in the browser (which already loads bb.js for proving).
   server so the tx source is unlinkable; trust = proof + single-use nullifier.
 - **Domain-separated nullifiers**: `nullifier_hash = H(nullifier, domain, sub_id)`
   — WITHDRAW(1), MESSAGE(2), VOTE(3, sub_id = poll). One deposit does each once.
-- **Payout binding**: `creator = keccak256(slug)` is not a wallet, so the admin
-  registers `creator -> wallet` (`register_payout`); `withdraw` pays that wallet.
-- **Action binding**: `action_data` (public) is recipient-less for withdraw,
-  `keccak256(message)` for message, the vote choice for vote — checked on-chain.
+- **Recipient binding (no registry)**: the depositor names the payout `recipient`
+  at withdraw time; it is bound into the proof via `action_data ==
+  keccak256(recipient_strkey) mod r`, so the relayer cannot redirect funds. No
+  creator setup is needed for private payments.
+- **Action binding**: `action_data` (public) is `keccak256(recipient)` for
+  withdraw, `keccak256(message)` for message, the vote choice for vote — checked
+  on-chain.
 
 ## Unified circuit
 
@@ -44,7 +47,7 @@ three actions. See `circuits/patronage/src/main.nr`.
 | Path | Role |
 |---|---|
 | `circuits/patronage/` | Noir unified circuit (membership + domain nullifier + tier + action bind) |
-| `contracts/patronage/` | Soroban pool: `deposit`, `withdraw`, `post`, `vote`, `register_payout`, `create_poll`, reads |
+| `contracts/patronage/` | Soroban pool: `deposit`, `withdraw`, `post`, `vote`, `create_poll`, reads |
 | `src/lib/patronage/fields.ts` | field/keccak helpers + `DOMAIN` + `TIERS` |
 | `src/lib/patronage/poseidon.ts` | Poseidon2 via bb.js (commitment + domain nullifier) |
 | `src/lib/patronage/merkle.ts` | client-side Merkle-path rebuild (bb.js) |
@@ -53,9 +56,9 @@ three actions. See `circuits/patronage/src/main.nr`.
 | `src/lib/patronage/server.ts` | server relay + admin + reads (no bb.js) |
 | `src/lib/patronage/use-patronage.ts` | hook: notes + spent-filter + deposit/withdraw/message/vote |
 | `src/lib/polls.ts` | poll metadata store (JSON / Firestore) |
-| `src/app/api/patronage/{config,leaves,withdraw,post,vote,spent,wall,poll,register}/` | API routes |
+| `src/app/api/patronage/{config,leaves,withdraw,post,vote,spent,wall,poll}/` | API routes |
 | `src/components/creator/PrivatePatronage.tsx`, `PatronagePolls.tsx`, `AnonWall.tsx` | supporter UI |
-| `src/components/creator/dashboard/PatronageAdmin.tsx` | creator UI (enable payout + open polls) |
+| `src/components/creator/dashboard/PatronageAdmin.tsx` | creator UI (open polls) |
 
 ## Env vars
 
@@ -91,9 +94,9 @@ stellar contract deploy --wasm target/.../patronage.wasm -- \
 # 4. set PATRONAGE_CONTRACT_ID (GitHub var + .env.local)
 ```
 
-Per creator: open the dashboard and click **Enable / re-register payout** (calls
-`register_payout`), then optionally **Open a poll**. Supporters need a USDC
-trustline + testnet USDC to deposit.
+Per creator: nothing is required for private payments (the supporter binds the
+recipient into their proof). Optionally **Open a poll** from the dashboard for
+anonymous voting. Supporters need a USDC trustline + testnet USDC to deposit.
 
 ## Validation
 

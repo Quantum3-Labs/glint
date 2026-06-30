@@ -32,7 +32,7 @@ type Path = { siblings: string[]; bits: number[]; root: string };
  * (with per-action spent status), the client-signed deposit, and the browser
  * proof -> relay for withdraw / message / vote. Keeps the UI presentational.
  */
-export function usePatronage(slug: string) {
+export function usePatronage(slug: string, creatorWallet: string) {
   const address = useWalletStore((s) => s.address);
   const refreshBalances = useWalletStore((s) => s.refreshBalances);
   const [notes, setNotes] = useState<NoteState[]>([]);
@@ -155,13 +155,18 @@ export function usePatronage(slug: string) {
         setBusy("Generating proof…");
         const { proofHex, publicInputsHex } = await generateWithdrawProof(
           note,
+          creatorWallet,
           path,
         );
         setBusy("Sending privately…");
         const res = await fetch("/api/patronage/withdraw", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ publicInputsHex, proofHex }),
+          body: JSON.stringify({
+            publicInputsHex,
+            proofHex,
+            recipient: creatorWallet,
+          }),
         });
         const result = await res.json();
         if (!res.ok || !result.ok)
@@ -184,7 +189,7 @@ export function usePatronage(slug: string) {
         setBusy(null);
       }
     },
-    [buildPath, refreshNotes],
+    [buildPath, refreshNotes, creatorWallet],
   );
 
   /** Post an anonymous message from a note. */

@@ -18,6 +18,7 @@ import {
   fieldToBytes32,
   messageHashField,
   modR,
+  recipientField,
 } from "./fields";
 import { commitment, nullifierHash } from "./poseidon";
 
@@ -132,14 +133,22 @@ async function generateProof(
   return { proofHex: bytesToHex(proof), publicInputsHex: bytesToHex(pub) };
 }
 
-/** Proof for a private withdrawal (pays the creator the tier amount). */
+/**
+ * Proof for a private withdrawal (pays `recipient` the tier amount). The
+ * recipient is bound via action_data so a relayer cannot redirect the payout.
+ */
 export function generateWithdrawProof(
   note: DepositNote,
+  recipient: string,
   path: MerklePath,
 ): Promise<ProofResult> {
   return generateProof(
     note,
-    { domain: DOMAIN.WITHDRAW, subId: 0n, actionData: 0n },
+    {
+      domain: DOMAIN.WITHDRAW,
+      subId: 0n,
+      actionData: recipientField(recipient),
+    },
     path,
   );
 }

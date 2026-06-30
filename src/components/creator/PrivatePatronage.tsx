@@ -43,10 +43,18 @@ function ShieldIcon({ size = 18 }: { size?: number }) {
  * pool, then take anonymous actions (private payment, message, vote) off the
  * resulting note. All crypto + relay lives in `usePatronage`.
  */
-export function PrivatePatronage({ slug }: { slug: string }) {
+export function PrivatePatronage({
+  slug,
+  creatorWallet,
+}: {
+  slug: string;
+  creatorWallet: string;
+}) {
   const address = useWalletStore((s) => s.address);
-  const { notes, busy, deposit, withdraw, postMessage, vote } =
-    usePatronage(slug);
+  const { notes, busy, deposit, withdraw, postMessage, vote } = usePatronage(
+    slug,
+    creatorWallet,
+  );
   const [tier, setTier] = useState<TierKey>("5");
 
   return (

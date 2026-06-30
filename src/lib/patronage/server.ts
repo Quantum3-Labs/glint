@@ -41,19 +41,6 @@ function u32ScVal(v: number): xdr.ScVal {
 
 // ── Admin writes ──────────────────────────────────────────────────────────────
 
-/** Map a creator field to its payout wallet so withdrawals can pay it. */
-export async function registerPayout(
-  creator: bigint,
-  wallet: string,
-): Promise<SendResult> {
-  return submitWithRetry(
-    getContractId(),
-    "register_payout",
-    [bytesScVal(fieldToBytes32(creator)), new Address(wallet).toScVal()],
-    "patronage",
-  );
-}
-
 /** Open a poll for a creator with `options` choices (0..options-1). */
 export async function createPoll(
   creator: bigint,
@@ -70,15 +57,20 @@ export async function createPoll(
 
 // ── Relayed writes ────────────────────────────────────────────────────────────
 
-/** Relay a private withdrawal: verify proof on-chain, pay the creator. */
+/** Relay a private withdrawal: verify proof on-chain, pay `recipient`. */
 export async function submitWithdraw(
   publicInputs: Uint8Array,
   proof: Uint8Array,
+  recipient: string,
 ): Promise<SendResult> {
   return submitWithRetry(
     getContractId(),
     "withdraw",
-    [bytesScVal(publicInputs), bytesScVal(proof)],
+    [
+      bytesScVal(publicInputs),
+      bytesScVal(proof),
+      new Address(recipient).toScVal(),
+    ],
     "patronage",
   );
 }
