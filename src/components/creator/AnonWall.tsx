@@ -9,7 +9,11 @@ import {
   type PatronagePostedDetail,
 } from "@/lib/patronage/events";
 
-type AnonMessage = { message: string; timestamp: string };
+type AnonMessage = { message: string; tier: string; timestamp: string };
+
+function dollars(stroops: string): string {
+  return `$${Number(BigInt(stroops)) / 1e7}`;
+}
 
 /**
  * Wall of anonymous, proof-backed supporter messages for a creator.
@@ -77,7 +81,8 @@ export function AnonWall({ slug }: { slug: string }) {
                     className="pb-4 border-b border-[var(--color-border)] last:border-0 last:pb-0"
                   >
                     <div className="text-xs text-[var(--color-ink-muted)] mb-1">
-                      verified supporter · {formatRelativeTime(m.timestamp)}
+                      verified {dollars(m.tier)} supporter ·{" "}
+                      {formatRelativeTime(m.timestamp)}
                     </div>
                     <p className="pl-3 border-l-2 border-[var(--color-accent)] text-sm text-[var(--color-ink-soft)] whitespace-pre-wrap break-words">
                       {m.message}

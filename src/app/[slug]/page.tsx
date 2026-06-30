@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { AnonPostForm } from "@/components/creator/AnonPostForm";
 import { AnonWall } from "@/components/creator/AnonWall";
+import { PrivatePatronage } from "@/components/creator/PrivatePatronage";
 import { ShareButton } from "@/components/creator/ShareButton";
 import { SocialLinks } from "@/components/creator/SocialLinks";
 import { TipForm } from "@/components/creator/TipForm";
@@ -65,10 +65,17 @@ export default async function CreatorPage({
         <TipWall slug={creator.slug} />
       </section>
 
-      {/* Anonymous patronage (ZK): post as a verified supporter + anonymous wall */}
-      <section className="grid lg:grid-cols-[1.1fr_1fr] gap-6 mt-6">
-        <AnonPostForm slug={creator.slug} />
-        <AnonWall slug={creator.slug} />
+      {/* Private patronage (ZK): deposit -> private payment / message / vote */}
+      <section className="mt-10">
+        <h2 className="font-display text-3xl mb-1">Private patronage</h2>
+        <p className="text-sm text-[var(--color-ink-muted)] mb-5">
+          One private deposit. Support, message, or vote — none of it linkable
+          to your wallet.
+        </p>
+        <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
+          <PrivatePatronage slug={creator.slug} />
+          <AnonWall slug={creator.slug} />
+        </div>
       </section>
     </PageShell>
   );
