@@ -13,6 +13,7 @@ import type { Creator } from "@/lib/creators/types";
 import { type FormStatus, isBusy } from "@/lib/form-status";
 import { shortenAddress } from "@/lib/stellar";
 import { useWalletStore } from "@/stores/wallet";
+import { useCreatorProfile } from "./dashboard/useCreatorProfile";
 
 const LABEL_CLASSES =
   "block text-xs uppercase tracking-wider text-[var(--color-ink-soft)] mb-2";
@@ -40,6 +41,10 @@ export function CreateProfileForm() {
     setHost(window.location.host);
   }, []);
 
+  // A wallet can only own one profile — if this one already has one, send them
+  // to it instead of letting them fill a form that will 409 on submit.
+  const { state: profileState } = useCreatorProfile(address);
+
   if (!address) {
     return (
       <EmptyState
@@ -47,6 +52,40 @@ export function CreateProfileForm() {
         title="Connect your wallet"
         description="Connect Freighter to pick a handle and start receiving tips. Your wallet address is your identity."
       />
+    );
+  }
+
+  if (profileState.kind === "loading") {
+    return (
+      <Card padding="lg">
+        <p className="text-sm text-[var(--color-ink-muted)]">
+          Checking your wallet…
+        </p>
+      </Card>
+    );
+  }
+
+  if (profileState.kind === "loaded") {
+    const existing = profileState.creator;
+    return (
+      <Card padding="lg">
+        <h2 className="font-display text-2xl mb-2">
+          You already have a profile
+        </h2>
+        <p className="text-sm text-[var(--color-ink-soft)] mb-1">
+          This wallet ({shortenAddress(address, 4, 4)}) owns{" "}
+          <span className="font-mono">@{existing.slug}</span>. One wallet, one
+          profile.
+        </p>
+        <div className="flex gap-3 mt-5">
+          <Link href={`/${existing.slug}`}>
+            <Button variant="primary">View your page</Button>
+          </Link>
+          <Link href="/dashboard">
+            <Button variant="secondary">Go to dashboard</Button>
+          </Link>
+        </div>
+      </Card>
     );
   }
 
