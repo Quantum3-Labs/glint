@@ -28,6 +28,7 @@ export async function GET(
     return NextResponse.json({
       messages: messages.map((m) => ({
         message: m.message,
+        tier: m.tier.toString(),
         timestamp: m.timestamp.toString(),
       })),
     });

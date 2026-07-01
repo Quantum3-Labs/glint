@@ -35,18 +35,29 @@ async function hash(inputs: bigint[]): Promise<bigint> {
   return modR(BigInt(out.toString()));
 }
 
-/** Commitment = Poseidon2([nullifier, secret, creator]). */
+/** Commitment = Poseidon2([nullifier, secret, creator, tier]). */
 export function commitment(
   nullifier: bigint,
   secret: bigint,
   creator: bigint,
+  tier: bigint,
 ): Promise<bigint> {
-  return hash([nullifier, secret, creator]);
+  return hash([nullifier, secret, creator, tier]);
 }
 
-/** nullifier_hash = Poseidon2([nullifier, 0]). */
-export function nullifierHash(nullifier: bigint): Promise<bigint> {
-  return hash([nullifier, 0n]);
+/**
+ * nullifier_hash = Poseidon2([nullifier, domain, sub_id]).
+ *
+ * `domain` separates the per-deposit actions (withdraw/message/vote) so each is
+ * independently single-use; `sub_id` is the poll id for votes (0 otherwise).
+ * MUST match the circuit's nullifier formula.
+ */
+export function nullifierHash(
+  nullifier: bigint,
+  domain: bigint,
+  subId: bigint,
+): Promise<bigint> {
+  return hash([nullifier, domain, subId]);
 }
 
 /** Merkle 2-to-1 node hash, matching the on-chain frontier tree. */

@@ -1,31 +1,17 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
-import { shortenAddress } from "@/lib/stellar";
 import { useWalletStore } from "@/stores/wallet";
+import { WalletMenu } from "./WalletMenu";
 
 export function ConnectButton() {
   const address = useWalletStore((s) => s.address);
   const isConnecting = useWalletStore((s) => s.isConnecting);
   const error = useWalletStore((s) => s.error);
   const connect = useWalletStore((s) => s.connect);
-  const disconnect = useWalletStore((s) => s.disconnect);
 
   if (address) {
-    return (
-      <button
-        type="button"
-        onClick={disconnect}
-        title="Click to disconnect"
-        className="inline-flex items-center gap-2 h-10 px-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-sunken)] hover:border-[var(--color-border-strong)] transition-colors text-sm"
-      >
-        <span
-          className="w-2 h-2 rounded-full bg-[var(--color-success)]"
-          aria-hidden="true"
-        />
-        <span className="font-mono">{shortenAddress(address)}</span>
-      </button>
-    );
+    return <WalletMenu />;
   }
 
   return (

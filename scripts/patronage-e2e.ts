@@ -14,6 +14,7 @@ import { join } from "node:path";
 import {
   bytesToHex,
   creatorField,
+  DOMAIN,
   fieldToBytes32,
   messageHashField,
   modR,
@@ -24,12 +25,17 @@ import {
   nullifierHash,
 } from "../src/lib/patronage/poseidon";
 
-const VERIFIER = "CBQRARZTFSB5VZD55UBCY4F2BH34QZ3A6AOBVNS2I2I6Y5QE6USYQTLJ";
+const VERIFIER = "CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI";
+// USDC SAC the pool custodies. Override with USDC_SAC for your environment.
+const TOKEN =
+  process.env.USDC_SAC ??
+  "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
 const WASM = "contracts/patronage/target/wasm32v1-none/release/patronage.wasm";
 const NET = "testnet";
 const SLUG = `e2e-${Date.now()}`;
 const MESSAGE = "gm — verified anonymous supporter";
 const TREE_DEPTH = 20;
+const TIER = 10_000_000n; // $1 USDC (stroops)
 const dir = mkdtempSync(join(tmpdir(), "patronage-e2e-"));
 
 function stellar(args: string[]): string {
@@ -66,17 +72,19 @@ async function main() {
     alice,
     "--verifier",
     VERIFIER,
+    "--token",
+    TOKEN,
   ]);
   console.log("fresh pool:", pool);
 
-  // 1. note + commitment
+  // 1. note + commitment (tier is bound into the commitment)
   const secret = rand();
   const nullifier = rand();
   const creator = creatorField(SLUG);
-  const c = await commitment(nullifier, secret, creator);
+  const c = await commitment(nullifier, secret, creator, TIER);
   console.log("commitment:", bytesToHex(fieldToBytes32(c)));
 
-  // 2. deposit
+  // 2. deposit (alice signs the USDC transfer into the pool)
   console.log("\n[deposit]");
   console.log(
     stellar([
@@ -92,6 +100,10 @@ async function main() {
       "yes",
       "--",
       "deposit",
+      "--from",
+      alice,
+      "--tier",
+      TIER.toString(),
       ...fileArg("commitment", fieldToBytes32(c)),
     ]),
   );
@@ -112,6 +124,8 @@ async function main() {
     NET,
     "--",
     "get_root",
+    "--tier",
+    TIER.toString(),
   ]).replace(/"/g, "");
   console.log("\ncomputed root:", root.toString(16));
   console.log(
@@ -124,7 +138,7 @@ async function main() {
 
   // 4. proof
   console.log("\n[proof]");
-  const nf = await nullifierHash(nullifier);
+  const nf = await nullifierHash(nullifier, DOMAIN.MESSAGE, 0n);
   const msgHash = messageHashField(MESSAGE);
   const { Noir } = await import("@noir-lang/noir_js");
   const { UltraHonkBackend } = await import("@aztec/bb.js");
@@ -136,7 +150,10 @@ async function main() {
     root: root.toString(),
     nullifier_hash: nf.toString(),
     creator: creator.toString(),
-    msg_hash: msgHash.toString(),
+    tier: TIER.toString(),
+    domain: DOMAIN.MESSAGE.toString(),
+    sub_id: "0",
+    action_data: msgHash.toString(),
     nullifier: nullifier.toString(),
     secret: secret.toString(),
     path_siblings: z.slice(0, TREE_DEPTH).map((s) => s.toString()),
@@ -146,8 +163,9 @@ async function main() {
   const { proof } = await backend.generateProof(witness, { keccak: true });
   console.log("proof bytes:", proof.length);
 
-  const pub = new Uint8Array(128);
-  [root, nf, creator, msgHash].forEach((f, i) => {
+  // Public inputs: [root, nf, creator, tier, domain, sub_id, action_data].
+  const pub = new Uint8Array(7 * 32);
+  [root, nf, creator, TIER, DOMAIN.MESSAGE, 0n, msgHash].forEach((f, i) => {
     pub.set(fieldToBytes32(f), i * 32);
   });
 

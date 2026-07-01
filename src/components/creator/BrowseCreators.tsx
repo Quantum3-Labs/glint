@@ -9,6 +9,7 @@ import { InitialAvatar } from "@/components/ui/InitialAvatar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { API_ENDPOINTS, ApiError, apiClient } from "@/lib/api";
 import type { Creator } from "@/lib/creators/types";
+import { useWalletStore } from "@/stores/wallet";
 
 type State =
   | { kind: "loading" }
@@ -21,6 +22,7 @@ const SEARCH_DEBOUNCE_MS = 250;
  * Browse + search creators. Client component that hits /api/creators.
  */
 export function BrowseCreators() {
+  const address = useWalletStore((s) => s.address);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -136,8 +138,15 @@ export function BrowseCreators() {
                     <div className="flex items-center gap-3 mb-3">
                       <InitialAvatar name={creator.displayName} />
                       <div className="min-w-0">
-                        <div className="font-display text-lg leading-tight truncate">
-                          {creator.displayName}
+                        <div className="flex items-center gap-2">
+                          <span className="font-display text-lg leading-tight truncate">
+                            {creator.displayName}
+                          </span>
+                          {address === creator.walletAddress && (
+                            <span className="shrink-0 rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-accent-ink)]">
+                              You
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs font-mono text-[var(--color-ink-muted)] truncate">
                           @{creator.slug}

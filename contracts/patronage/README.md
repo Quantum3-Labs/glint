@@ -1,64 +1,66 @@
-# Glint Patronage Pool (Soroban)
+# Glint Private Patronage Pool (Soroban)
 
-A Tornado-style privacy pool for **anonymous creator patronage**. Pairs with the
-Noir circuit in [`circuits/patronage`](../../circuits/patronage) and an external
+A Tornado-style privacy pool that **custodies USDC** and lets a supporter take
+several anonymous actions off a single fixed-amount deposit. Pairs with the Noir
+circuit in [`circuits/patronage`](../../circuits/patronage) and an external
 UltraHonk verifier contract.
 
 ## Why this exists
 
-Glint tips are public (USDC over x402, recorded on the TipJar wall). This pool
-lets a supporter later prove "I backed creator C" and post a **verified anonymous**
-message — without revealing which wallet or which payment was theirs.
+One private deposit unlocks three single-use, unlinkable actions for a creator:
+pay them privately (withdraw), post a verified anonymous message, and vote in a
+poll — none of it linkable to the depositor's wallet.
 
 ## Design decisions
 
-- **Global pool.** Every tip (any creator) commits into one Merkle tree, so the
-  anonymity set is every depositor — not just this creator's supporters. The
-  `creator` is a public input: we reveal *which* creator is backed, hide *who*.
-- **Commitment = `Poseidon(nullifier, secret, creator)`.** Built client-side, so
-  the server never learns the secret.
-- **Server-gated deposit.** `deposit` requires admin auth: the Glint server
-  appends the commitment right after the x402 payment settles.
-- **Open post.** `post` needs no auth — trust comes from the ZK proof + the
-  single-use nullifier. A relayer (the server) submits it so the transaction's
-  source account does not link back to the supporter.
-- **Message binding.** `msg_hash` is a public input of the proof; `post`
-  recomputes `keccak256(message) mod r` and rejects a mismatch, so a relayer
-  cannot swap the message.
-- **Root history.** Each new deposit changes the root, so `KnownRoot` records
-  every root produced; a proof built against any past root still verifies.
-
-## Verified feasible (Day-1 spike)
-
-The full deposit -> withdraw of the upstream `tornado_classic` reference runs
-on Stellar testnet at **83.77M / 100M** instructions. See
-[`docs/zk-hackathon-feasibility.md`](../../docs/zk-hackathon-feasibility.md).
+- **Tier pools.** Each fixed denomination ($0.1/$1/$5/$10/$100 in stroops) has its own
+  Merkle tree. `tier` is bound into the commitment and exposed as a public input,
+  so a $1 deposit cannot withdraw a $10 payout.
+- **Commitment = `Poseidon(nullifier, secret, creator, tier)`.** Built
+  client-side, so the pool never learns the secret.
+- **Supporter-signed deposit.** `deposit(from, tier, commitment)` pulls `tier`
+  USDC from `from` (Freighter signature) into the pool, then appends the leaf.
+- **Domain-separated nullifiers.** `nullifier_hash = H(nullifier, domain, sub_id)`
+  — WITHDRAW(1), MESSAGE(2), VOTE(3, sub_id = poll). One deposit does each once.
+- **Relayed actions.** `withdraw` / `post` / `vote` need no auth — trust is the
+  ZK proof + single-use nullifier. The server relays them so the tx source does
+  not link back to the supporter.
+- **Recipient binding (no registry).** The depositor names the payout `recipient`
+  at withdraw time; it is bound into the proof via `action_data ==
+  keccak256(recipient_strkey) mod r`, so a relayer cannot redirect funds.
+- **Action binding.** `action_data` (public) is `keccak256(recipient)` for
+  withdraw, `keccak256(message)` for messages, the vote choice for votes —
+  checked on-chain.
+- **Stake-weighted voting.** A vote adds its deposit `tier` to the tally (not +1),
+  so influence is proportional to money staked and immune to splitting into cheap
+  deposits (1×$100 == 100×$1). One vote per (deposit, poll).
+- **Root history.** Each deposit changes that tier's root; `KnownRoot(tier, root)`
+  records every root so a proof against any past root still verifies.
 
 ## Interface
 
 | fn | auth | purpose |
 |---|---|---|
-| `__constructor(admin, verifier)` | — | set the server admin + verifier contract |
-| `deposit(commitment) -> u32` | admin | append a commitment, return its leaf index |
-| `post(public_inputs, proof, message)` | none | verify proof, record anonymous message |
-| `get_wall(creator) -> Vec<AnonMessage>` | none | read a creator's anonymous wall |
-| `get_root() -> Option<BytesN<32>>` | none | current Merkle root |
-| `get_leaves() -> Vec<BytesN<32>>` | none | all leaf commitments (client rebuilds the path) |
+| `__constructor(admin, verifier, token)` | — | set admin, verifier, USDC SAC |
+| `create_poll(creator, poll_id, options)` | admin | open a poll with N choices |
+| `deposit(from, tier, commitment) -> u32` | from | pull USDC, append commitment, return leaf index |
+| `withdraw(public_inputs, proof, recipient)` | none | verify (recipient bound in proof), pay `recipient` `tier` |
+| `post(public_inputs, proof, message)` | none | verify, record an anonymous message |
+| `vote(public_inputs, proof, choice)` | none | verify, add the deposit tier to the tally |
+| `get_wall(creator) -> Vec<AnonMessage>` | none | a creator's anonymous wall (message + tier) |
+| `get_tally(creator, poll_id) -> Vec<i128>` | none | stake-weighted vote totals (stroops) per choice |
+| `get_root(tier)` / `get_leaves(tier)` | none | tier root / leaves (client rebuilds the path) |
 | `is_nullifier_used(nf) -> bool` | none | nullifier spent check |
 
-`public_inputs` = `[root, nullifier_hash, creator, msg_hash]` (4 x 32 bytes).
+`public_inputs` = `[root, nullifier_hash, creator, tier, domain, sub_id,
+action_data]` (7 x 32 bytes).
 
-## Scaffold TODO (not production-ready)
+## TODO (not production-hardened)
 
-- [ ] **Amount tiers.** To support "tipped >= $X", run one tree per amount tier
-      and deposit into the tier matching the settled payment. This contract is a
-      single tier. (Hidden amounts inside the commitment are unsafe — the server
-      cannot verify a hidden amount, so a client could lie.)
 - [ ] **Bounded root history** — evict old `KnownRoot` entries (ring buffer).
-- [ ] Confirm `keccak256(message) mod r` matches the client byte-for-byte, and
-      that the circuit's `msg_hash` binding survives Noir optimization.
-- [ ] Tests (deposit/post happy path + double-spend + wrong-root + bad-message).
-- [ ] Re-measure `post` instructions against the ~16M headroom once wired.
+- [ ] Tests (deposit/withdraw/post/vote happy paths + double-spend + wrong-root +
+      wrong-domain + bad-message + cross-tier replay).
+- [ ] Re-measure per-action instruction cost on testnet.
 
 ## Build
 

@@ -1,12 +1,7 @@
 import Link from "next/link";
 import { SparkleGlyph } from "@/components/ui/EmptyState";
 import { ConnectButton } from "@/components/wallet/ConnectButton";
-
-const NAV_LINKS = [
-  { href: "/browse", label: "Browse" },
-  { href: "/create", label: "Create" },
-  { href: "/dashboard", label: "Dashboard" },
-];
+import { HeaderNav } from "./HeaderNav";
 
 /**
  * Global site header — wordmark on the left, nav in the middle,
@@ -26,17 +21,7 @@ export function SiteHeader() {
           <span className="font-display text-2xl tracking-tight">glint</span>
         </Link>
 
-        <nav className="hidden sm:flex items-center gap-8 text-sm">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] transition-colors"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+        <HeaderNav />
 
         <ConnectButton />
       </div>
