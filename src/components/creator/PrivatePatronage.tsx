@@ -51,11 +51,15 @@ export function PrivatePatronage({
   creatorWallet: string;
 }) {
   const address = useWalletStore((s) => s.address);
-  const { notes, busy, deposit, withdraw, postMessage, vote } = usePatronage(
-    slug,
-    creatorWallet,
-  );
+  const { notes, busy, busyFor, deposit, withdraw, postMessage, vote } =
+    usePatronage(slug, creatorWallet);
   const [tier, setTier] = useState<TierKey>("5");
+  // Notes with a one-shot action left. Fully-used notes stay in storage (still
+  // usable for voting) but drop out of this panel to keep it clean; their
+  // on-chain receipts live on the Activity wall.
+  const actionableNotes = notes.filter(
+    (n) => !n.withdrawSpent || !n.messageSpent,
+  );
 
   return (
     <div className="space-y-6">
@@ -98,7 +102,7 @@ export function PrivatePatronage({
           fullWidth
           onClick={() => deposit(TIERS[tier])}
         >
-          {busy ? (
+          {busyFor === "deposit" ? (
             <>
               <Spinner size={16} />
               {busy}
@@ -111,16 +115,17 @@ export function PrivatePatronage({
         </Button>
       </Card>
 
-      {/* Actions from notes */}
-      {notes.length > 0 && (
+      {/* Notes with an action still available. */}
+      {actionableNotes.length > 0 && (
         <Card padding="lg">
           <h3 className="font-display text-xl mb-3">Your private notes</h3>
           <ul className="space-y-4">
-            {notes.map((n) => (
+            {actionableNotes.map((n) => (
               <NoteActions
                 key={n.commitmentHex}
                 note={n}
                 busy={busy}
+                busyFor={busyFor}
                 onWithdraw={() => withdraw(n)}
                 onMessage={(msg) => postMessage(n, msg)}
               />
@@ -138,16 +143,20 @@ export function PrivatePatronage({
 function NoteActions({
   note,
   busy,
+  busyFor,
   onWithdraw,
   onMessage,
 }: {
   note: NoteState;
   busy: string | null;
+  busyFor: string | null;
   onWithdraw: () => void;
   onMessage: (message: string) => Promise<boolean>;
 }) {
   const [message, setMessage] = useState("");
   const [showMessage, setShowMessage] = useState(false);
+  const withdrawing = busyFor === `withdraw:${note.commitmentHex}`;
+  const messaging = busyFor === `message:${note.commitmentHex}`;
 
   return (
     <li className="rounded-md border border-[var(--color-border)] p-4 space-y-3">
@@ -155,7 +164,7 @@ function NoteActions({
         <span className="text-sm font-medium">
           {dollars(note.tier)} note ·{" "}
           <span className="text-xs text-[var(--color-ink-muted)] font-normal">
-            verified {dollars(note.tier)} supporter
+            Verified {dollars(note.tier)} supporter
           </span>
         </span>
         <span className="text-xs text-[var(--color-ink-muted)]">
@@ -175,14 +184,21 @@ function NoteActions({
             disabled={!!busy}
             onClick={onWithdraw}
           >
-            Send {dollars(note.tier)} to creator
+            {withdrawing ? (
+              <>
+                <Spinner size={14} />
+                {busy}
+              </>
+            ) : (
+              `Send ${dollars(note.tier)} to creator`
+            )}
           </Button>
         )}
         {!note.messageSpent && (
           <Button
             type="button"
             size="sm"
-            variant="ghost"
+            variant="secondary"
             disabled={!!busy}
             onClick={() => setShowMessage((v) => !v)}
           >
@@ -218,7 +234,14 @@ function NoteActions({
                 }
               }}
             >
-              Post anonymously
+              {messaging ? (
+                <>
+                  <Spinner size={14} />
+                  {busy}
+                </>
+              ) : (
+                "Post anonymously"
+              )}
             </Button>
           </div>
         </div>

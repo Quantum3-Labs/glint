@@ -7,7 +7,6 @@ import { EmptyState, UserIcon, WalletIcon } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useWalletStore } from "@/stores/wallet";
 import { EditProfileForm } from "./EditProfileForm";
-import { PatronageAdmin } from "./PatronageAdmin";
 import { StatsCards } from "./StatsCards";
 import { TippingLinkCard } from "./TippingLinkCard";
 import { useCreatorProfile } from "./useCreatorProfile";
@@ -75,10 +74,6 @@ export function Dashboard() {
       <EditProfileForm
         creator={creator}
         onSave={async (updates) => updateProfile(creator.slug, updates)}
-      />
-      <PatronageAdmin
-        slug={creator.slug}
-        walletAddress={creator.walletAddress}
       />
     </div>
   );

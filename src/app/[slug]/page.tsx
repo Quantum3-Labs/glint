@@ -1,10 +1,8 @@
 import { notFound } from "next/navigation";
-import { AnonWall } from "@/components/creator/AnonWall";
-import { PrivatePatronage } from "@/components/creator/PrivatePatronage";
+import { OwnerPollButton } from "@/components/creator/OwnerPollButton";
+import { ProfileTabs } from "@/components/creator/ProfileTabs";
 import { ShareButton } from "@/components/creator/ShareButton";
 import { SocialLinks } from "@/components/creator/SocialLinks";
-import { TipForm } from "@/components/creator/TipForm";
-import { TipWall } from "@/components/creator/TipWall";
 import { PageShell } from "@/components/layout/PageShell";
 import { InitialAvatar } from "@/components/ui/InitialAvatar";
 import { getCreatorsStore, validateSlug } from "@/lib/creators";
@@ -55,31 +53,22 @@ export default async function CreatorPage({
             )}
             <SocialLinks creator={creator} />
           </div>
-          <ShareButton slug={creator.slug} />
+          <div className="flex items-center gap-2">
+            <OwnerPollButton
+              slug={creator.slug}
+              creatorWallet={creator.walletAddress}
+            />
+            <ShareButton slug={creator.slug} />
+          </div>
         </div>
       </section>
 
-      {/* Two-column: tip form (left) + tipping wall (right) */}
-      <section className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
-        <TipForm slug={creator.slug} displayName={creator.displayName} />
-        <TipWall slug={creator.slug} />
-      </section>
-
-      {/* Private patronage (ZK): deposit -> private payment / message / vote */}
-      <section className="mt-10">
-        <h2 className="font-display text-3xl mb-1">Private patronage</h2>
-        <p className="text-sm text-[var(--color-ink-muted)] mb-5">
-          One private deposit. Support, message, or vote — none of it linkable
-          to your wallet.
-        </p>
-        <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
-          <PrivatePatronage
-            slug={creator.slug}
-            creatorWallet={creator.walletAddress}
-          />
-          <AnonWall slug={creator.slug} />
-        </div>
-      </section>
+      {/* Two ways to support: public tip vs private patronage (tabs) */}
+      <ProfileTabs
+        slug={creator.slug}
+        displayName={creator.displayName}
+        creatorWallet={creator.walletAddress}
+      />
     </PageShell>
   );
 }
