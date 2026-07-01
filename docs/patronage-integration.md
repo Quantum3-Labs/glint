@@ -89,7 +89,7 @@ The browser reads the contract id from `/api/patronage/config` at runtime, so no
 
 | What | Contract ID |
 |---|---|
-| Pool (USDC custody, tier-weighted voting) | `CDEJJRLEHI77XFYB2FKMS72VYIQLL7PL267D43Q5MNBWUKNWNLLQJUVB` |
+| Pool (USDC custody, tier-weighted voting) | `CA24QYVHEGC64LP7SML7B2N3FNXBXXCAI4KBZBV3D4PYQDKUWC6FOJXD` |
 | UltraHonk verifier (patronage VK) | `CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI` |
 | USDC SAC (testnet) | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
