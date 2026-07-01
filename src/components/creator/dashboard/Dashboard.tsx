@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, UserIcon, WalletIcon } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { WalletBalances } from "@/components/wallet/WalletBalances";
 import { useWalletStore } from "@/stores/wallet";
 import { EditProfileForm } from "./EditProfileForm";
 import { PatronageAdmin } from "./PatronageAdmin";
@@ -81,7 +80,6 @@ export function Dashboard() {
         slug={creator.slug}
         walletAddress={creator.walletAddress}
       />
-      <WalletBalances />
     </div>
   );
 }
