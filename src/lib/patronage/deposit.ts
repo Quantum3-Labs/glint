@@ -96,8 +96,9 @@ export async function depositToPool(
     const res = await server.getTransaction(hash);
     if (res.status === "NOT_FOUND") continue;
     if (res.status === "SUCCESS") {
-      // Persist only after the deposit settles, so we never store an unusable note.
-      saveNote(note, commitmentHex);
+      // Persist only after the deposit settles, so we never store an unusable
+      // note. Keyed by `address` so only the depositing account sees it.
+      saveNote(note, commitmentHex, address);
       return { txHash: hash, commitmentHex };
     }
     if (res.status === "FAILED") {

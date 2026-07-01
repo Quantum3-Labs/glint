@@ -25,7 +25,7 @@ import {
   nullifierHash,
 } from "../src/lib/patronage/poseidon";
 
-const VERIFIER = "CDIXM6HS6FYPHYHPE52FHKWO7RPJRL3DIK5KJZG5AJR27XNETDBDK3BC";
+const VERIFIER = "CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI";
 // USDC SAC the pool custodies. Override with USDC_SAC for your environment.
 const TOKEN =
   process.env.USDC_SAC ??

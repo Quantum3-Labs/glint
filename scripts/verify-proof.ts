@@ -25,7 +25,7 @@ import {
   nullifierHash,
 } from "../src/lib/patronage/poseidon";
 
-const VERIFIER = "CDIXM6HS6FYPHYHPE52FHKWO7RPJRL3DIK5KJZG5AJR27XNETDBDK3BC";
+const VERIFIER = "CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI";
 const NET = "testnet";
 const TREE_DEPTH = 20;
 const TIER = 10_000_000n; // $1

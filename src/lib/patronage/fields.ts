@@ -108,3 +108,11 @@ export const TIER_AMOUNTS: readonly bigint[] = TIER_ORDER.map((k) => TIERS[k]);
 export function isValidTier(amount: bigint): boolean {
   return TIER_AMOUNTS.includes(amount);
 }
+
+/**
+ * Read the `index`-th 32-byte public-input field from a 224-byte hex blob
+ * (order: root, nullifier_hash, creator, tier, domain, sub_id, action_data).
+ */
+export function publicInputField(hex: string, index: number): bigint {
+  return bytes32ToField(hexToBytes(hex).slice(index * 32, index * 32 + 32));
+}

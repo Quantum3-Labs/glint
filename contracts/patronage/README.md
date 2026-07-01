@@ -31,6 +31,9 @@ poll — none of it linkable to the depositor's wallet.
 - **Action binding.** `action_data` (public) is `keccak256(recipient)` for
   withdraw, `keccak256(message)` for messages, the vote choice for votes —
   checked on-chain.
+- **Stake-weighted voting.** A vote adds its deposit `tier` to the tally (not +1),
+  so influence is proportional to money staked and immune to splitting into cheap
+  deposits (1×$100 == 100×$1). One vote per (deposit, poll).
 - **Root history.** Each deposit changes that tier's root; `KnownRoot(tier, root)`
   records every root so a proof against any past root still verifies.
 
@@ -43,9 +46,9 @@ poll — none of it linkable to the depositor's wallet.
 | `deposit(from, tier, commitment) -> u32` | from | pull USDC, append commitment, return leaf index |
 | `withdraw(public_inputs, proof, recipient)` | none | verify (recipient bound in proof), pay `recipient` `tier` |
 | `post(public_inputs, proof, message)` | none | verify, record an anonymous message |
-| `vote(public_inputs, proof, choice)` | none | verify, increment the poll tally |
+| `vote(public_inputs, proof, choice)` | none | verify, add the deposit tier to the tally |
 | `get_wall(creator) -> Vec<AnonMessage>` | none | a creator's anonymous wall (message + tier) |
-| `get_tally(creator, poll_id) -> Vec<u32>` | none | vote counts per choice |
+| `get_tally(creator, poll_id) -> Vec<i128>` | none | stake-weighted vote totals (stroops) per choice |
 | `get_root(tier)` / `get_leaves(tier)` | none | tier root / leaves (client rebuilds the path) |
 | `is_nullifier_used(nf) -> bool` | none | nullifier spent check |
 

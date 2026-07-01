@@ -11,10 +11,10 @@ import {
 } from "./client";
 import { depositToPool } from "./deposit";
 import { friendlyError } from "./errors";
-import { dispatchPatronagePosted } from "./events";
+import { dispatchActivity, dispatchPatronagePosted } from "./events";
 import { bytes32ToField, DOMAIN, hexToBytes } from "./fields";
 import { buildMerklePath } from "./merkle";
-import { notesForSlug, removeNote } from "./notes";
+import { notesForSlug } from "./notes";
 import { nullifierHash } from "./poseidon";
 
 export type StoredNote = ReturnType<typeof notesForSlug>[number];
@@ -37,9 +37,17 @@ export function usePatronage(slug: string, creatorWallet: string) {
   const refreshBalances = useWalletStore((s) => s.refreshBalances);
   const [notes, setNotes] = useState<NoteState[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  // Which control is running, so only that button shows progress (not the
+  // shared deposit button). "deposit" | "withdraw:<cm>" | "message:<cm>" |
+  // "vote:<cm>".
+  const [busyFor, setBusyFor] = useState<string | null>(null);
 
   const refreshNotes = useCallback(async () => {
-    const ns = notesForSlug(slug);
+    if (!address) {
+      setNotes([]);
+      return;
+    }
+    const ns = notesForSlug(slug, address);
     if (ns.length === 0) {
       setNotes([]);
       return;
@@ -75,17 +83,17 @@ export function usePatronage(slug: string, creatorWallet: string) {
       // network error -> treat nothing as spent (actions will fail loudly if so)
     }
 
-    const next: NoteState[] = ns.map((n, i) => ({
-      ...n,
-      withdrawSpent: spentSet.has(withdraw[i]),
-      messageSpent: spentSet.has(message[i]),
-    }));
-    // Drop notes whose main actions are both used up.
-    next.forEach((n) => {
-      if (n.withdrawSpent && n.messageSpent) removeNote(n.commitmentHex);
-    });
-    setNotes(next.filter((n) => !(n.withdrawSpent && n.messageSpent)));
-  }, [slug]);
+    // Keep every note: even after withdraw + message are spent, the note can
+    // still vote (the vote nullifier is per-poll and domain-separated, so it is
+    // never "fully" spent). Panels decide what to show from the spent flags.
+    setNotes(
+      ns.map((n, i) => ({
+        ...n,
+        withdrawSpent: spentSet.has(withdraw[i]),
+        messageSpent: spentSet.has(message[i]),
+      })),
+    );
+  }, [slug, address]);
 
   useEffect(() => {
     refreshNotes();
@@ -123,6 +131,7 @@ export function usePatronage(slug: string, creatorWallet: string) {
         return false;
       }
       try {
+        setBusyFor("deposit");
         setBusy("Waiting for Freighter…");
         const { txHash } = await depositToPool(slug, tier, address);
         toast.success("Deposited into the private pool", {
@@ -141,6 +150,7 @@ export function usePatronage(slug: string, creatorWallet: string) {
         return false;
       } finally {
         setBusy(null);
+        setBusyFor(null);
       }
     },
     [address, slug, refreshBalances, refreshNotes],
@@ -150,6 +160,7 @@ export function usePatronage(slug: string, creatorWallet: string) {
   const withdraw = useCallback(
     async (note: NoteState): Promise<boolean> => {
       try {
+        setBusyFor(`withdraw:${note.commitmentHex}`);
         setBusy("Building Merkle path…");
         const path = await buildPath(note);
         setBusy("Generating proof…");
@@ -166,11 +177,13 @@ export function usePatronage(slug: string, creatorWallet: string) {
             publicInputsHex,
             proofHex,
             recipient: creatorWallet,
+            slug,
           }),
         });
         const result = await res.json();
         if (!res.ok || !result.ok)
           throw new Error(result.error ?? "withdraw failed");
+        dispatchActivity(slug);
         toast.success("Sent privately to the creator", {
           description: "Unlinkable to your deposit.",
           action: {
@@ -187,9 +200,10 @@ export function usePatronage(slug: string, creatorWallet: string) {
         return false;
       } finally {
         setBusy(null);
+        setBusyFor(null);
       }
     },
-    [buildPath, refreshNotes, creatorWallet],
+    [buildPath, refreshNotes, creatorWallet, slug],
   );
 
   /** Post an anonymous message from a note. */
@@ -197,6 +211,7 @@ export function usePatronage(slug: string, creatorWallet: string) {
     async (note: NoteState, message: string): Promise<boolean> => {
       if (message.length === 0) return false;
       try {
+        setBusyFor(`message:${note.commitmentHex}`);
         setBusy("Building Merkle path…");
         const path = await buildPath(note);
         setBusy("Generating proof…");
@@ -209,11 +224,12 @@ export function usePatronage(slug: string, creatorWallet: string) {
         const res = await fetch("/api/patronage/post", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ publicInputsHex, proofHex, message }),
+          body: JSON.stringify({ publicInputsHex, proofHex, message, slug }),
         });
         const result = await res.json();
         if (!res.ok || !result.ok)
           throw new Error(result.error ?? "post failed");
+        dispatchActivity(slug);
         toast.success("Anonymous message posted", {
           description: "Verified on-chain, unlinkable to your wallet.",
           action: {
@@ -231,6 +247,7 @@ export function usePatronage(slug: string, creatorWallet: string) {
         return false;
       } finally {
         setBusy(null);
+        setBusyFor(null);
       }
     },
     [buildPath, refreshNotes, slug],
@@ -244,6 +261,7 @@ export function usePatronage(slug: string, creatorWallet: string) {
       choice: number,
     ): Promise<boolean> => {
       try {
+        setBusyFor(`vote:${note.commitmentHex}`);
         setBusy("Building Merkle path…");
         const path = await buildPath(note);
         setBusy("Generating proof…");
@@ -257,14 +275,16 @@ export function usePatronage(slug: string, creatorWallet: string) {
         const res = await fetch("/api/patronage/vote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ publicInputsHex, proofHex, choice }),
+          body: JSON.stringify({ publicInputsHex, proofHex, choice, slug }),
         });
         const result = await res.json();
         if (!res.ok || !result.ok)
           throw new Error(result.error ?? "vote failed");
+        dispatchActivity(slug);
         toast.success("Vote cast anonymously", {
           description: "One vote per supporter, unlinkable to your wallet.",
         });
+        await refreshNotes();
         return true;
       } catch (err) {
         console.error("[patronage] vote failed:", err);
@@ -272,10 +292,20 @@ export function usePatronage(slug: string, creatorWallet: string) {
         return false;
       } finally {
         setBusy(null);
+        setBusyFor(null);
       }
     },
-    [buildPath],
+    [buildPath, refreshNotes, slug],
   );
 
-  return { notes, busy, deposit, withdraw, postMessage, vote, refreshNotes };
+  return {
+    notes,
+    busy,
+    busyFor,
+    deposit,
+    withdraw,
+    postMessage,
+    vote,
+    refreshNotes,
+  };
 }

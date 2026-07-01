@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { badRequest, parseJsonBody, serverError } from "@/lib/api-helpers";
-import { hexToBytes } from "@/lib/patronage/fields";
+import { validateSlug } from "@/lib/creators";
+import { recordActivity } from "@/lib/patronage/activity";
+import { hexToBytes, publicInputField } from "@/lib/patronage/fields";
 import { submitWithdraw } from "@/lib/patronage/server";
 import { clientKeyFromRequest, rateLimit } from "@/lib/rate-limit";
 import { isValidStellarAddress } from "@/lib/stellar";
 
 const RATE_LIMIT = { max: 5, windowMs: 60_000 };
 
-type Body = { publicInputsHex?: string; proofHex?: string; recipient?: string };
+type Body = {
+  publicInputsHex?: string;
+  proofHex?: string;
+  recipient?: string;
+  slug?: string;
+};
 
 /**
  * POST /api/patronage/withdraw
@@ -45,6 +52,8 @@ export async function POST(request: Request) {
   if (!isValidStellarAddress(recipient)) {
     return badRequest("recipient must be a valid Stellar address");
   }
+  const slugResult = validateSlug(body.slug ?? "");
+  if (!slugResult.ok) return badRequest("valid slug is required");
 
   try {
     const result = await submitWithdraw(
@@ -58,6 +67,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    await recordActivity(slugResult.slug, {
+      type: "payment",
+      tier: publicInputField(publicInputsHex, 3).toString(),
+      txHash: result.hash,
+      createdAt: Date.now(),
+    });
     return NextResponse.json({ ok: true, txHash: result.hash });
   } catch (err) {
     console.error("[patronage/withdraw]", (err as Error).message);

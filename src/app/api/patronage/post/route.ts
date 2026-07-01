@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { badRequest, parseJsonBody, serverError } from "@/lib/api-helpers";
-import { hexToBytes } from "@/lib/patronage/fields";
+import { validateSlug } from "@/lib/creators";
+import { recordActivity } from "@/lib/patronage/activity";
+import { hexToBytes, publicInputField } from "@/lib/patronage/fields";
 import { submitPost } from "@/lib/patronage/server";
 import { clientKeyFromRequest, rateLimit } from "@/lib/rate-limit";
 
 const POST_RATE_LIMIT = { max: 5, windowMs: 60_000 };
 const MESSAGE_MAX = 280;
 
-type Body = { publicInputsHex?: string; proofHex?: string; message?: string };
+type Body = {
+  publicInputsHex?: string;
+  proofHex?: string;
+  message?: string;
+  slug?: string;
+};
 
 /**
  * POST /api/patronage/post
@@ -48,6 +55,8 @@ export async function POST(request: Request) {
   if (new TextEncoder().encode(message).length > MESSAGE_MAX) {
     return badRequest(`message must be ${MESSAGE_MAX} bytes or less`);
   }
+  const slugResult = validateSlug(body.slug ?? "");
+  if (!slugResult.ok) return badRequest("valid slug is required");
 
   try {
     const result = await submitPost(
@@ -62,6 +71,13 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    await recordActivity(slugResult.slug, {
+      type: "message",
+      tier: publicInputField(publicInputsHex, 3).toString(),
+      message,
+      txHash: result.hash,
+      createdAt: Date.now(),
+    });
     return NextResponse.json({ ok: true, txHash: result.hash });
   } catch (err) {
     console.error("[patronage/post]", (err as Error).message);

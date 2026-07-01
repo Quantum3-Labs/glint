@@ -125,7 +125,7 @@ pub enum DataKey {
     Wall(BytesN<32>),
     /// (creator, poll_id) -> number of options.
     Poll(BytesN<32>, u32),
-    /// (creator, poll_id, choice) -> vote count.
+    /// (creator, poll_id, choice) -> stake-weighted vote total (sum of tiers).
     Tally(BytesN<32>, u32, u32),
 }
 
@@ -475,11 +475,14 @@ impl Patronage {
         Self::check_known_root(&env, tier, &pi[0])?;
         Self::verify_proof(&env, &public_inputs, &proof_bytes)?;
 
+        // Stake-weighted: a vote adds its deposit tier, so influence is
+        // proportional to money staked and immune to splitting into cheap
+        // deposits (1x$100 == 100x$1 in weight).
         let tally_key = DataKey::Tally(creator, poll_id, choice);
-        let count: u32 = env.storage().persistent().get(&tally_key).unwrap_or(0u32);
+        let weight: i128 = env.storage().persistent().get(&tally_key).unwrap_or(0i128);
         env.storage()
             .persistent()
-            .set(&tally_key, &(count.saturating_add(1)));
+            .set(&tally_key, &(weight.saturating_add(tier)));
 
         env.storage().persistent().set(&DataKey::Nullifier(nf.clone()), &true);
         VoteEvent {
@@ -527,8 +530,9 @@ impl Patronage {
             .has(&DataKey::Nullifier(nullifier_hash))
     }
 
-    /// Vote counts for a poll, indexed by choice (0..options-1).
-    pub fn get_tally(env: Env, creator: BytesN<32>, poll_id: u32) -> Vec<u32> {
+    /// Stake-weighted vote totals for a poll (sum of deposit tiers, in stroops),
+    /// indexed by choice (0..options-1).
+    pub fn get_tally(env: Env, creator: BytesN<32>, poll_id: u32) -> Vec<i128> {
         let options: u32 = env
             .storage()
             .persistent()
@@ -537,12 +541,12 @@ impl Patronage {
         let mut out = Vec::new(&env);
         let mut c = 0u32;
         while c < options {
-            let count: u32 = env
+            let weight: i128 = env
                 .storage()
                 .persistent()
                 .get(&DataKey::Tally(creator.clone(), poll_id, c))
-                .unwrap_or(0u32);
-            out.push_back(count);
+                .unwrap_or(0i128);
+            out.push_back(weight);
             c += 1;
         }
         out
