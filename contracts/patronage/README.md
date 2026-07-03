@@ -27,7 +27,7 @@ poll — none of it linkable to the depositor's wallet.
   not link back to the supporter.
 - **Recipient binding (no registry).** The depositor names the payout `recipient`
   at withdraw time; it is bound into the proof via `action_data ==
-  keccak256(recipient_strkey) mod r`, so a relayer cannot redirect funds.
+keccak256(recipient_strkey) mod r`, so a relayer cannot redirect funds.
 - **Action binding.** `action_data` (public) is `keccak256(recipient)` for
   withdraw, `keccak256(message)` for messages, the vote choice for votes —
   checked on-chain.
@@ -41,29 +41,24 @@ poll — none of it linkable to the depositor's wallet.
 
 ## Interface
 
-| fn | auth | purpose |
-|---|---|---|
-| `__constructor(admin, verifier, token)` | — | set admin, verifier, USDC SAC |
-| `create_poll(creator, poll_id, options)` | admin | open a poll with N choices |
-| `deposit(from, tier, commitment) -> u32` | from | pull USDC, append commitment, return leaf index |
-| `withdraw(public_inputs, proof, recipient)` | none | verify (recipient bound in proof), pay `recipient` `tier` |
-| `post(public_inputs, proof, message)` | none | verify, record an anonymous message |
-| `vote(public_inputs, proof, choice)` | none | verify, add the deposit tier to the tally |
-| `get_wall(creator) -> Vec<AnonMessage>` | none | a creator's anonymous wall (message + tier) |
-| `get_tally(creator, poll_id) -> Vec<i128>` | none | stake-weighted vote totals (stroops) per choice |
-| `get_root(tier)` / `get_leaves(tier)` | none | tier root / leaves (client rebuilds the path) |
-| `is_nullifier_used(nf) -> bool` | none | nullifier spent check |
+| fn                                          | auth  | purpose                                                   |
+| ------------------------------------------- | ----- | --------------------------------------------------------- |
+| `__constructor(admin, verifier, token)`     | —     | set admin, verifier, USDC SAC                             |
+| `create_poll(creator, poll_id, options)`    | admin | open a poll with N choices                                |
+| `deposit(from, tier, commitment) -> u32`    | from  | pull USDC, append commitment, return leaf index           |
+| `withdraw(public_inputs, proof, recipient)` | none  | verify (recipient bound in proof), pay `recipient` `tier` |
+| `post(public_inputs, proof, message)`       | none  | verify, record an anonymous message                       |
+| `vote(public_inputs, proof, choice)`        | none  | verify, add the deposit tier to the tally                 |
+| `get_wall(creator) -> Vec<AnonMessage>`     | none  | a creator's anonymous wall (message + tier)               |
+| `get_tally(creator, poll_id) -> Vec<i128>`  | none  | stake-weighted vote totals (stroops) per choice           |
+| `get_root(tier)` / `get_leaves(tier)`       | none  | tier root / leaves (client rebuilds the path)             |
+| `is_nullifier_used(nf) -> bool`             | none  | nullifier spent check                                     |
 
 `public_inputs` = `[root, nullifier_hash, creator, tier, domain, sub_id,
 action_data]` (7 x 32 bytes).
 
 ## TODO (not production-hardened)
 
-- [x] **Bounded root history** — ring buffer keeps the last `ROOT_HISTORY_SIZE`
-      (30) roots per tier; older `KnownRoot` entries are evicted.
-- [x] Tests — deposit/withdraw/post/vote happy paths + double-spend + wrong-root +
-      wrong-domain + bad-message + cross-tier replay + root eviction. See
-      `contracts/patronage/src/test.rs` (mock verifier isolates the pool logic).
 - [ ] Re-measure per-action instruction cost on testnet.
 
 ## Build

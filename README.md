@@ -1,17 +1,16 @@
 # Glint
 
-Micropayment tipping dApp on Stellar. Creators receive USDC tips directly, with
-zero platform fees, over the [x402](https://x402.org) payment protocol — it works
-for both humans (browser) and AI agents (HTTP).
-
+Micropayment tipping dApp on Stellar. Creators receive USDC tips directly,
 On top of tipping, Glint adds a **zero-knowledge privacy layer**: a supporter can
 back a creator **anonymously**, with every action still provable on-chain.
 
 Two ways to support a creator:
 
-- **Tip publicly** — an x402 USDC tip with a note on the public wall.
 - **Support privately (ZK)** — one private deposit into a pool, then several
   anonymous actions that no one can link back to your wallet.
+
+- Tip publicly — an x402 USDC tip with a note on the public wall. with
+  zero platform fees, it works for both humans (browser) and AI agents (HTTP).
 
 The private path is the ZK feature and the focus of this README — see
 [Private Patronage](#private-patronage-zk).
@@ -117,7 +116,7 @@ STEP 3 — SEE  (anyone)
   redirect funds, and creators need no setup to receive private payments.
 - **Stake-weighted voting.** A vote adds its deposit `tier` to the tally (not +1),
   so influence is proportional to money staked and immune to splitting one big
-  deposit into many cheap ones (1×$100 == 100×$1). It is a *money gate*, not a bot
+  deposit into many cheap ones (1×$100 == 100×$1). It is a _money gate_, not a bot
   filter — true one-person-one-vote needs proof-of-personhood (out of scope).
 - **Bounded root history.** Each deposit changes that tier's root; the pool keeps
   the last 30 roots per tier in a ring buffer, so a proof stays valid while other
@@ -142,11 +141,11 @@ The circuit is unchanged by the stake-weighting (that lives in the contract tall
 
 ## Contracts (testnet)
 
-| What | Contract ID |
-|---|---|
+| What                                                             | Contract ID                                                |
+| ---------------------------------------------------------------- | ---------------------------------------------------------- |
 | Patronage pool (USDC custody, tier trees, stake-weighted voting) | `CBIF3QGK3K6YPYWD3JXAMK2POAZYTXHQOJ2CCLN2E4OIJ3DUXYZM6HZ4` |
-| UltraHonk verifier (patronage VK) | `CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI` |
-| USDC SAC (testnet) | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
+| UltraHonk verifier (patronage VK)                                | `CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI` |
+| USDC SAC (testnet)                                               | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
 The pool admin/relayer is the Glint server keypair
 (`GA7EALDD5PJYUIJR6BHXAR7FN2XP6PSXWKVJXSSGDX5UWPPX4TFV3ATA`). Contract-level
