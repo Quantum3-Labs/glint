@@ -2,6 +2,11 @@
 
 Micropayment tipping dApp on Stellar. Creators receive USDC tips directly, with zero platform fees. Built on the x402 payment protocol — works for both humans (browser) and AI agents (HTTP).
 
+Two ways to support a creator:
+
+- **Tip publicly** — an x402 USDC tip with a note on the public wall.
+- **Support privately (ZK)** — one private deposit into a Tornado-style pool lets a supporter take several **anonymous, on-chain-verifiable** actions for a creator (pay them privately, post a verified anonymous message, and vote in polls), none of it linkable to their wallet. Proving is in-browser (Noir + UltraHonk); a Soroban verifier checks the proof on-chain. See [`docs/patronage-integration.md`](docs/patronage-integration.md).
+
 ## Tech stack
 
 - [Next.js](https://nextjs.org/) 16 (App Router, TypeScript, Turbopack)
@@ -10,6 +15,8 @@ Micropayment tipping dApp on Stellar. Creators receive USDC tips directly, with 
 - [@stellar/stellar-sdk](https://www.npmjs.com/package/@stellar/stellar-sdk) — Stellar network client
 - [@stellar/freighter-api](https://www.npmjs.com/package/@stellar/freighter-api) — Freighter wallet connect
 - [x402-stellar](https://www.npmjs.com/package/x402-stellar) — x402 payment protocol on Stellar
+- [Noir](https://noir-lang.org/) + UltraHonk (`bb.js`) — in-browser ZK proving for private patronage
+- [Soroban](https://developers.stellar.org/docs/build/smart-contracts) — TipJar + patronage pool + UltraHonk verifier contracts
 - pnpm (via corepack)
 
 ## Setup
