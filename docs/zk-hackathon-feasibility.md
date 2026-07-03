@@ -8,6 +8,16 @@ DoraHacks listing text.
 - Submissions open **June 15, 2026 (12:00 AM PST)**; deadline **June 29, 2026 (12:00 PM PST)** = June 30 02:00 UTC.
 - Prizes (single open innovation track): 1st **$5,000**, 2nd **$2,000**, 3rd **$1,250**, 4th **$1,000**, 5th **$750** — all in XLM.
 
+> **Status (shipped design evolved past this report).** This is the original
+> feasibility/go-no-go report, kept as a record. The feature that shipped is
+> broader than §2/§5 describe: a single private deposit into a USDC-custody pool
+> unlocks **three** unlinkable actions — private payment, anonymous message, and
+> stake-weighted voting — not just an anonymous message. In particular §4/§5
+> assume "the ZK step does not move tokens"; the shipped `withdraw` **does** pay
+> the creator from the pool (recipient bound in the proof), so instruction cost
+> must be re-measured with the token transfer in the proven path. For the current
+> architecture and contract IDs see [`patronage-integration.md`](./patronage-integration.md).
+
 ## 1. The hackathon — and does Glint qualify?
 
 **Theme (verbatim):** "build anything you want with zero-knowledge on Stellar. Privacy pools,
