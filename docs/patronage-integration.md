@@ -89,7 +89,7 @@ The browser reads the contract id from `/api/patronage/config` at runtime, so no
 
 | What | Contract ID |
 |---|---|
-| Pool (USDC custody, tier-weighted voting) | `CA24QYVHEGC64LP7SML7B2N3FNXBXXCAI4KBZBV3D4PYQDKUWC6FOJXD` |
+| Pool (USDC custody, tier-weighted voting) | `CBIF3QGK3K6YPYWD3JXAMK2POAZYTXHQOJ2CCLN2E4OIJ3DUXYZM6HZ4` |
 | UltraHonk verifier (patronage VK) | `CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI` |
 | USDC SAC (testnet) | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
@@ -130,6 +130,10 @@ USDC to deposit.
 - `pnpm tsc --noEmit`, `pnpm biome check`, and `pnpm build` are clean.
 - Contract compiles to wasm; circuit compiles; Poseidon (commitment + nullifier)
   matches bb.js ↔ Noir ↔ Rust (`scripts/poseidon-check.ts`).
+- `cargo test -p patronage` — 19 unit tests over the pool logic (a mock verifier
+  isolates the cross-call): deposit/withdraw/post/vote happy paths, double-spend,
+  unknown/evicted root, wrong domain, recipient + message binding, cross-tier
+  replay, verification failure, and root-history eviction.
 - `scripts/verify-proof.ts` proves the circuit and verifies it on the deployed
   verifier (no USDC needed) — confirms the VK + 7 public inputs + keccak oracle.
 - `scripts/patronage-e2e.ts` drives the message flow end-to-end on testnet
@@ -149,7 +153,9 @@ USDC to deposit.
   source of truth.
 - **Anonymity needs time**: depositing then immediately withdrawing in an empty
   pool links the two by timing. The set grows with depositors.
-- **Root history is unbounded** (`KnownRoot` never evicts) — fine for a demo.
+- **Root history is bounded** — the pool keeps the last 30 roots per tier in a
+  ring buffer (`ROOT_HISTORY_SIZE`); a proof built against a root older than 30
+  deposits is rejected (`UnknownRoot`) and must be regenerated.
 - **Five tiers** ($0.1/$1/$5/$10/$100). Add denominations in `fields.ts` `TIERS` +
   contract `is_valid_tier`.
 - Testnet only, dev server keypair as admin/relayer. Redeploy fresh elsewhere.

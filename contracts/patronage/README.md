@@ -34,8 +34,10 @@ poll — none of it linkable to the depositor's wallet.
 - **Stake-weighted voting.** A vote adds its deposit `tier` to the tally (not +1),
   so influence is proportional to money staked and immune to splitting into cheap
   deposits (1×$100 == 100×$1). One vote per (deposit, poll).
-- **Root history.** Each deposit changes that tier's root; `KnownRoot(tier, root)`
-  records every root so a proof against any past root still verifies.
+- **Bounded root history.** Each deposit changes that tier's root. The last
+  `ROOT_HISTORY_SIZE` (30) roots per tier are kept in a ring buffer so a proof
+  built against a recent root still verifies while another deposit lands; roots
+  older than that are evicted, keeping storage bounded.
 
 ## Interface
 
@@ -57,9 +59,11 @@ action_data]` (7 x 32 bytes).
 
 ## TODO (not production-hardened)
 
-- [ ] **Bounded root history** — evict old `KnownRoot` entries (ring buffer).
-- [ ] Tests (deposit/withdraw/post/vote happy paths + double-spend + wrong-root +
-      wrong-domain + bad-message + cross-tier replay).
+- [x] **Bounded root history** — ring buffer keeps the last `ROOT_HISTORY_SIZE`
+      (30) roots per tier; older `KnownRoot` entries are evicted.
+- [x] Tests — deposit/withdraw/post/vote happy paths + double-spend + wrong-root +
+      wrong-domain + bad-message + cross-tier replay + root eviction. See
+      `contracts/patronage/src/test.rs` (mock verifier isolates the pool logic).
 - [ ] Re-measure per-action instruction cost on testnet.
 
 ## Build
