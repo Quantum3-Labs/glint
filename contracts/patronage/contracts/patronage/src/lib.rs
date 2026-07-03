@@ -29,9 +29,10 @@
 //! ## Payout binding
 //!
 //! `creator` is `keccak256(slug) mod r`, not a wallet, so the contract cannot
-//! derive the payout address from the proof. The admin registers
-//! `creator -> wallet` via `register_payout`; `withdraw` pays that wallet. A
-//! relayer therefore cannot redirect a withdrawal.
+//! derive the payout address from the proof. Instead the depositor names the
+//! payout `recipient` when proving: `withdraw` binds it via `action_data ==
+//! keccak256(recipient_strkey) mod r` and pays exactly that address, so a
+//! relayer cannot redirect a withdrawal. No creator registration is needed.
 
 extern crate alloc;
 use alloc::vec::Vec as RustVec;
@@ -45,6 +46,11 @@ use soroban_sdk::{
 /// Merkle tree depth. MUST match the Noir circuit's `TREE_DEPTH`.
 const TREE_DEPTH: u32 = 20;
 const MAX_LEAVES: u32 = 1u32 << TREE_DEPTH;
+
+/// How many recent roots per tier stay valid for proofs. A proof built against
+/// a root older than the last `ROOT_HISTORY_SIZE` deposits is rejected
+/// (`UnknownRoot`) and must be regenerated. Bounds `KnownRoot` storage growth.
+const ROOT_HISTORY_SIZE: u32 = 30;
 
 /// UltraHonk public inputs: 7 field elements
 /// [root, nullifier_hash, creator, tier, domain, sub_id, action_data].
@@ -118,6 +124,9 @@ pub enum DataKey {
     Frontier(i128, u32),
     Leaf(i128, u32),
     KnownRoot(i128, BytesN<32>),
+    /// Ring buffer of recent roots: (tier, slot) -> root, slot = index mod
+    /// ROOT_HISTORY_SIZE. Lets `append_leaf` evict the root it overwrites.
+    RootSlot(i128, u32),
     // ---- global uniqueness ----
     Commitment(BytesN<32>),
     Nullifier(BytesN<32>),
@@ -640,6 +649,23 @@ impl Patronage {
         }
 
         env.storage().instance().set(&DataKey::Root(tier), &cur);
+
+        // Ring-buffer the known roots: keep only the most recent
+        // ROOT_HISTORY_SIZE. The slot this deposit writes may hold the root from
+        // ROOT_HISTORY_SIZE deposits ago (when idx >= ROOT_HISTORY_SIZE); evict
+        // that stale root so `KnownRoot` stays bounded.
+        let slot = idx % ROOT_HISTORY_SIZE;
+        let slot_key = DataKey::RootSlot(tier, slot);
+        if let Some(stale_root) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, BytesN<32>>(&slot_key)
+        {
+            env.storage()
+                .persistent()
+                .remove(&DataKey::KnownRoot(tier, stale_root));
+        }
+        env.storage().persistent().set(&slot_key, &cur);
         env.storage()
             .persistent()
             .set(&DataKey::KnownRoot(tier, cur), &true);
@@ -650,3 +676,5 @@ impl Patronage {
         Ok(idx)
     }
 }
+
+mod test;
