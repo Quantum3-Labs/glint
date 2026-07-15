@@ -143,12 +143,12 @@ The circuit is unchanged by the stake-weighting (that lives in the contract tall
 
 | What                                                             | Contract ID                                                |
 | ---------------------------------------------------------------- | ---------------------------------------------------------- |
-| Patronage pool (USDC custody, tier trees, stake-weighted voting) | `CBIF3QGK3K6YPYWD3JXAMK2POAZYTXHQOJ2CCLN2E4OIJ3DUXYZM6HZ4` |
-| UltraHonk verifier (patronage VK)                                | `CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI` |
-| USDC SAC (testnet)                                               | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
+| Patronage pool (USDC custody, tier trees, stake-weighted voting) | [`CBIF3QGK3K6YPYWD3JXAMK2POAZYTXHQOJ2CCLN2E4OIJ3DUXYZM6HZ4`](https://stellar.expert/explorer/testnet/contract/CBIF3QGK3K6YPYWD3JXAMK2POAZYTXHQOJ2CCLN2E4OIJ3DUXYZM6HZ4) |
+| UltraHonk verifier (patronage VK)                                | [`CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI`](https://stellar.expert/explorer/testnet/contract/CAQQYBTA2Q5GOFTL5VDZMM6UIPMOCGYKYSCN53UN63ESTTPWNBQOOPFI) |
+| USDC SAC (testnet)                                               | [`CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`](https://stellar.expert/explorer/testnet/contract/CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA) |
 
 The pool admin/relayer is the Glint server keypair
-(`GA7EALDD5PJYUIJR6BHXAR7FN2XP6PSXWKVJXSSGDX5UWPPX4TFV3ATA`). Contract-level
+([`GA7EALDD5PJYUIJR6BHXAR7FN2XP6PSXWKVJXSSGDX5UWPPX4TFV3ATA`](https://stellar.expert/explorer/testnet/account/GA7EALDD5PJYUIJR6BHXAR7FN2XP6PSXWKVJXSSGDX5UWPPX4TFV3ATA)). Contract-level
 detail lives in [`contracts/patronage/README.md`](contracts/patronage/README.md)
 (the private pool) and [`contracts/tipjar/README.md`](contracts/tipjar/README.md)
 (the public tip wall).
